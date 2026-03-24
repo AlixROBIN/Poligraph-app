@@ -1,0 +1,26 @@
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.5rem;
+  background: linear-gradient(135deg, #5268ff, #8d8dff);
+  color: white;
+}
+.navbar h1 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.nav-links button {
+  margin-left: 0.4rem;
+  border: none;
+  background: transparent;
+  color: #e8eaff;
+  padding: 0.45rem 0.72rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.nav-links button.active,
+.nav-links button:hover {
+  border-bottom: 2px solid white;
+  color: white;
+}
