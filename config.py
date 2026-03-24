@@ -11,14 +11,25 @@ DATA: Final[Path] = BASE / "data"
 OUTPUT: Final[Path] = BASE / "output"
 LOGS: Final[Path] = BASE / "logs"
 
-# Créer les répertoires
 for directory in [DATA, OUTPUT, LOGS]:
     directory.mkdir(exist_ok=True)
 
-# ===== FICHIERS =====
+# ===== FICHIERS BRUTS =====
 RAW_CSV: Final[Path] = DATA / "raw.csv"
-CLEANED_CSV: Final[Path] = DATA / "cleaned.csv"
-CLEANED_JSON: Final[Path] = DATA / "cleaned.json"
+
+# ===== BRANCHE ANALYTICS =====
+CLEANED_ANALYTICS_CSV: Final[Path] = DATA / "cleaned_analytics.csv"
+CLEANED_ANALYTICS_JSON: Final[Path] = DATA / "cleaned_analytics.json"
+CLEANED_ANALYTICS_PARQUET: Final[Path] = DATA / "cleaned_analytics.parquet"
+
+# Compatibilité avec ancien code
+CLEANED_CSV: Final[Path] = CLEANED_ANALYTICS_CSV
+CLEANED_JSON: Final[Path] = CLEANED_ANALYTICS_JSON
+CLEANED_PARQUET: Final[Path] = CLEANED_ANALYTICS_PARQUET
+
+# ===== BRANCHE ML DIAMANT =====
+CLEANED_ML_CSV: Final[Path] = DATA / "cleaned_ml.csv"
+CLEANED_ML_PARQUET: Final[Path] = DATA / "cleaned_ml.parquet"
 
 # ===== API =====
 API_URL: Final[str] = "https://poligraph.fr/api/politiques"
@@ -31,7 +42,7 @@ CHART_1: Final[Path] = OUTPUT / "01_exploration.png"
 CHART_2: Final[Path] = OUTPUT / "02_mining.png"
 CHART_3: Final[Path] = OUTPUT / "03_detailed.png"
 
-# ===== RAPPORTS =====
+# ===== RAPPORTS & LOGS =====
 REPORT_EXPLORATION: Final[Path] = OUTPUT / "exploration.txt"
 REPORT_MINING: Final[Path] = OUTPUT / "mining.txt"
 LOG_FILE: Final[Path] = LOGS / "pipeline.log"

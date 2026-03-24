@@ -1,8 +1,15 @@
+"""
+API FastAPI pour servir la branche Analytics à ton frontend React
+"""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
-from config import CLEANED_CSV
 
+from config import CLEANED_ANALYTICS_PARQUET
+from logger_config import setup_logger
+
+logger = setup_logger(__name__)
 app = FastAPI()
 
 app.add_middleware(
@@ -18,23 +25,30 @@ df = None
 @app.on_event("startup")
 def load_data():
     global df
-    df = pd.read_csv(CLEANED_CSV)
+    logger.info(f"[API] Chargement données Analytics : {CLEANED_ANALYTICS_PARQUET}")
+    df = pd.read_parquet(CLEANED_ANALYTICS_PARQUET)
+    logger.info(f"[API] Données chargées : {len(df)} lignes")
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "rows": len(df) if df is not None else 0}
+    return {"status": "ok", "rows": int(len(df)) if df is not None else 0}
 
 @app.get("/api/data")
 def api_data(limit: int = 100, offset: int = 0):
     result = df.iloc[offset : offset + limit]
-    return {"total": len(df), "limit": limit, "offset": offset, "data": result.to_dict(orient="records")}
+    return {
+        "total": int(len(df)),
+        "limit": limit,
+        "offset": offset,
+        "data": result.to_dict(orient="records"),
+    }
 
 @app.get("/api/metrics")
 def api_metrics():
     missing_pct = (df.isnull().sum().sum() / (len(df) * len(df.columns))) * 100
     return {
         "total_records": int(len(df)),
-        "total_columns": len(df.columns),
+        "total_columns": int(len(df.columns)),
         "duplicates": int(df.duplicated().sum()),
         "missing_percent": round(missing_pct, 2),
     }
