@@ -32,7 +32,7 @@ CLEANED_ML_CSV: Final[Path] = DATA / "cleaned_ml.csv"
 CLEANED_ML_PARQUET: Final[Path] = DATA / "cleaned_ml.parquet"
 
 # ===== API =====
-API_URL: Final[str] = "https://poligraph.fr/api/politiques"
+API_URL: Final[str] = "https://poligraph.fr/api/"
 API_LIMIT: Final[int] = 100
 API_TIMEOUT: Final[int] = 30
 MAX_RETRIES: Final[int] = 3

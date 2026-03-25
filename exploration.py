@@ -1,116 +1,178 @@
 """
-Exploration et analyse descriptive des données brutes
+Exploration avancée des données Analytics enrichies
+- Analyse temporelle
+- Analyse par domaine / parti / institution
+- Corrélations
+- Rapport global
 """
 
 import pandas as pd
 import matplotlib.pyplot as plt
-from typing import Dict, Any
+import seaborn as sns
 
-from config import RAW_CSV, CHART_1, REPORT_EXPLORATION, CHART_DPI, CHART_SIZE
+from config import (
+    CLEANED_ANALYTICS_CSV,
+    OUTPUT,
+    CHART_DPI,
+    CHART_SIZE,
+    REPORT_EXPLORATION,
+)
 from logger_config import setup_logger
 
 logger = setup_logger(__name__)
 
-class DataExplorer:
-    """Explore les données brutes"""
+CHART_SCANDALES_PAR_AN = OUTPUT / "scandales_par_an.png"
+CHART_SCANDALES_PAR_DOMAINE = OUTPUT / "scandales_par_domaine.png"
+CHART_SCANDALES_PAR_PARTI = OUTPUT / "scandales_par_parti.png"
+CHART_SCANDALES_PAR_INSTITUTION = OUTPUT / "scandales_par_institution.png"
+CHART_HEATMAP = OUTPUT / "correlation_heatmap.png"
 
-    def __init__(self, path=RAW_CSV):
-        logger.info(f"[FILE] Chargement : {path}")
+
+class DataExplorer:
+    """Exploration avancée des données Analytics enrichies"""
+
+    def __init__(self, path=CLEANED_ANALYTICS_CSV):
+        logger.info(f"[FILE] Chargement Analytics enrichi : {path}")
         self.df = pd.read_csv(path)
 
-    def explore(self) -> Dict[str, Any]:
-        logger.info("[*] Exploration des données...\n")
+    def explore(self):
+        logger.info("[*] Exploration avancée...")
 
-        self._print_info()
-        analysis = self._analyze_columns()
-        self._generate_charts()
-        self._save_report(analysis)
+        self._scandales_par_an()
+        self._scandales_par_domaine()
+        self._scandales_par_parti()
+        self._scandales_par_institution()
+        self._heatmap_correlations()
+        self._save_report()
 
         logger.info("[SUCCESS] Exploration complétée\n")
-        return analysis
 
-    def _print_info(self) -> None:
-        logger.info(f"[STATS] Dimensions : {self.df.shape}")
-        logger.info(f"[STATS] Colonnes : {list(self.df.columns)}")
+    # -----------------------------
+    # ANALYSES
+    # -----------------------------
 
-        missing = self.df.isnull().sum()
-        total_missing = int(missing.sum())
-        if total_missing > 0:
-            logger.info(f"[STATS] Valeurs manquantes totales : {total_missing}")
-            top_missing = missing[missing > 0].sort_values(ascending=False).head(10)
-            for col, cnt in top_missing.items():
-                logger.info(f"   - {col}: {cnt}")
+    def _scandales_par_an(self):
+        logger.info("[*] Scandales par année...")
+        if "year" not in self.df.columns:
+            return
 
-    def _analyze_columns(self) -> Dict[str, Dict[str, Any]]:
-        analysis: Dict[str, Dict[str, Any]] = {}
-        logger.info("\n[*] Détail colonnes :")
+        counts = self.df["year"].value_counts().sort_index()
 
-        for col in self.df.columns:
-            analysis[col] = {
-                "type": str(self.df[col].dtype),
-                "unique": int(self.df[col].nunique()),
-                "missing": int(self.df[col].isnull().sum()),
-            }
-
-            logger.info(f"\n  [COL] {col}")
-            logger.info(f"     Type : {analysis[col]['type']}")
-            logger.info(f"     Uniques : {analysis[col]['unique']}")
-
-        return analysis
-
-    def _generate_charts(self) -> None:
-        logger.info("\n[*] Génération graphiques...")
-
-        fig, axes = plt.subplots(2, 2, figsize=CHART_SIZE)
-        fig.suptitle(
-            "Exploration des Données - PoliGraph",
-            fontsize=16,
-            fontweight="bold",
-        )
-
-        missing = self.df.isnull().sum()
-        axes[0, 0].barh(range(len(missing)), missing.values, color="coral")
-        axes[0, 0].set_yticks(range(len(missing)))
-        axes[0, 0].set_yticklabels(missing.index)
-        axes[0, 0].set_title("Valeurs manquantes")
-
-        dtype_counts = self.df.dtypes.value_counts()
-        axes[0, 1].pie(
-            dtype_counts.values,
-            labels=dtype_counts.index,
-            autopct="%1.1f%%",
-        )
-        axes[0, 1].set_title("Types de données")
-
-        card = self.df.nunique()
-        axes[1, 0].barh(range(len(card)), card.values, color="lightgreen")
-        axes[1, 0].set_yticks(range(len(card)))
-        axes[1, 0].set_yticklabels(card.index)
-        axes[1, 0].set_title("Cardinalité")
-
-        axes[1, 1].axis("off")
-
+        plt.figure(figsize=CHART_SIZE)
+        counts.plot(kind="bar", color="steelblue")
+        plt.title("Nombre de scandales par année")
+        plt.xlabel("Année")
+        plt.ylabel("Nombre de scandales")
         plt.tight_layout()
-        plt.savefig(CHART_1, dpi=CHART_DPI, bbox_inches="tight")
-        logger.info(f"[OK] Chart : {CHART_1}")
+        plt.savefig(CHART_SCANDALES_PAR_AN, dpi=CHART_DPI)
         plt.close()
 
-    def _save_report(self, analysis: Dict[str, Any]) -> None:
+    def _scandales_par_domaine(self):
+        if "category" not in self.df.columns:
+            return
+
+        logger.info("[*] Scandales par domaine...")
+        counts = (
+            self.df[self.df["category"] != "Non spécifié"]["category"]
+            .value_counts()
+            .head(20)
+        )
+
+        plt.figure(figsize=CHART_SIZE)
+        counts.plot(kind="barh", color="coral")
+        plt.title("Top domaines de scandales")
+        plt.xlabel("Nombre")
+        plt.tight_layout()
+        plt.savefig(CHART_SCANDALES_PAR_DOMAINE, dpi=CHART_DPI)
+        plt.close()
+
+    def _scandales_par_parti(self):
+        if "party_short" not in self.df.columns:
+            return
+
+        logger.info("[*] Scandales par parti politique...")
+        counts = (
+            self.df[self.df["party_short"].notna()]["party_short"]
+            .value_counts()
+            .head(20)
+        )
+
+        plt.figure(figsize=CHART_SIZE)
+        counts.plot(kind="barh", color="purple")
+        plt.title("Top partis impliqués dans des scandales")
+        plt.xlabel("Nombre")
+        plt.tight_layout()
+        plt.savefig(CHART_SCANDALES_PAR_PARTI, dpi=CHART_DPI)
+        plt.close()
+
+    def _scandales_par_institution(self):
+        if "institution_clean" not in self.df.columns:
+            return
+
+        logger.info("[*] Scandales par institution...")
+        counts = (
+            self.df[self.df["institution_clean"].notna()]["institution_clean"]
+            .value_counts()
+            .head(20)
+        )
+
+        plt.figure(figsize=CHART_SIZE)
+        counts.plot(kind="barh", color="green")
+        plt.title("Top institutions impliquées")
+        plt.xlabel("Nombre")
+        plt.tight_layout()
+        plt.savefig(CHART_SCANDALES_PAR_INSTITUTION, dpi=CHART_DPI)
+        plt.close()
+
+    def _heatmap_correlations(self):
+        logger.info("[*] Heatmap des corrélations...")
+        numeric = self.df.select_dtypes(include=["number"])
+
+        if numeric.empty:
+            logger.info("[WARN] Aucune colonne numérique pour corrélation")
+            return
+
+        plt.figure(figsize=(12, 10))
+        sns.heatmap(numeric.corr(), cmap="coolwarm", center=0)
+        plt.title("Corrélations entre variables numériques")
+        plt.tight_layout()
+        plt.savefig(CHART_HEATMAP, dpi=CHART_DPI)
+        plt.close()
+
+    # -----------------------------
+    # RAPPORT
+    # -----------------------------
+
+    def _save_report(self):
+        logger.info("[*] Rapport exploration...")
+
         with open(REPORT_EXPLORATION, "w", encoding="utf-8") as f:
-            f.write("EXPLORATION - POLIGRAPH API\n")
+            f.write("EXPLORATION ANALYTICS ENRICHIES\n")
             f.write("=" * 50 + "\n\n")
+
             f.write(f"Records: {len(self.df)}\n")
             f.write(f"Colonnes: {len(self.df.columns)}\n\n")
-            f.write("COLONNES:\n")
-            for col, info in analysis.items():
-                f.write(f"\n{col}:\n")
-                f.write(f"  Type: {info['type']}\n")
-                f.write(f"  Uniques: {info['unique']}\n")
-                f.write(f"  Manquants: {info['missing']}\n")
 
-def main() -> None:
+            if "category" in self.df.columns:
+                f.write("\nTop domaines :\n")
+                f.write(str(self.df["category"].value_counts().head(20)))
+                f.write("\n\n")
+
+            if "party_short" in self.df.columns:
+                f.write("\nTop partis :\n")
+                f.write(str(self.df["party_short"].value_counts().head(20)))
+                f.write("\n\n")
+
+            if "institution_clean" in self.df.columns:
+                f.write("\nTop institutions :\n")
+                f.write(str(self.df["institution_clean"].value_counts().head(20)))
+                f.write("\n\n")
+
+
+def main():
     explorer = DataExplorer()
     explorer.explore()
+
 
 if __name__ == "__main__":
     main()

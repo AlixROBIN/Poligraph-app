@@ -1,82 +1,153 @@
 """
-Récupération des données depuis l'API PoliGraph
+Fetching massif pour l'API PoliGraph :
+- endpoints paginés : politiques, affaires, votes, partis, mandats, elections
+- pagination robuste
+- checkpoint par endpoint
+- parallélisation
+- sauvegarde incrémentale
 """
 
+import json
+import time
 import requests
 import pandas as pd
-from typing import List, Dict, Any
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from config import API_URL, API_LIMIT, API_TIMEOUT, MAX_RETRIES, RAW_CSV
+from config import DATA, API_URL, API_LIMIT, API_TIMEOUT, MAX_RETRIES
 from logger_config import setup_logger
 
 logger = setup_logger(__name__)
 
-class APIFetcher:
-    """Récupère les données de l'API PoliGraph"""
+PARTIAL_DIR = DATA / "partial_fetch"
+PARTIAL_DIR.mkdir(exist_ok=True)
 
-    def __init__(self, url: str = API_URL, limit: int = API_LIMIT):
-        self.url = url
-        self.limit = limit
-        self.session = requests.Session()
+CHECKPOINT_DIR = DATA / "checkpoints"
+CHECKPOINT_DIR.mkdir(exist_ok=True)
 
-    def fetch_all(self) -> List[Dict[str, Any]]:
-        logger.info("[*] Récupération des données...")
-        all_data: List[Dict[str, Any]] = []
-        page = 1
+# ---------------------------------------------------------
+# 1. ENDPOINTS PAGINÉS
+# ---------------------------------------------------------
 
-        while True:
-            try:
-                page_data = self._fetch_page(page)
+ENDPOINTS = [
+    "politiques",
+    "affaires",
+    "votes",
+    "partis",
+    "mandats",
+    "elections"
+]
 
-                if not page_data:
-                    logger.info(f"[OK] Fin de pagination à la page {page}")
-                    break
 
-                all_data.extend(page_data)
-                logger.info(
-                    f"  [OK] Page {page} : {len(page_data)} records "
-                    f"(Total: {len(all_data)})"
-                )
-                page += 1
+# ---------------------------------------------------------
+# 2. CHECKPOINT PAR ENDPOINT
+# ---------------------------------------------------------
 
-            except Exception as e:
-                logger.error(f"[ERROR] Erreur page {page} : {str(e)}")
-                raise
+def checkpoint_file(endpoint):
+    return CHECKPOINT_DIR / f"{endpoint}_checkpoint.json"
 
-        logger.info(f"[SUCCESS] Total : {len(all_data)} enregistrements\n")
-        return all_data
 
-    def _fetch_page(self, page: int) -> List[Dict[str, Any]]:
-        params = {"page": page, "limit": self.limit}
+def load_checkpoint(endpoint):
+    f = checkpoint_file(endpoint)
+    if f.exists():
+        try:
+            with open(f, "r", encoding="utf-8") as fp:
+                cp = json.load(fp)
+                if "page" in cp:
+                    return cp
+        except:
+            pass
+    return {"page": 1}
 
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = self.session.get(
-                    self.url, params=params, timeout=API_TIMEOUT
-                )
-                response.raise_for_status()
-                return response.json()
 
-            except requests.RequestException as e:
-                if attempt < MAX_RETRIES - 1:
-                    logger.warning(
-                        f"Tentative {attempt + 1}/{MAX_RETRIES} échouée : {e}"
-                    )
-                else:
-                    logger.error(f"Échec après {MAX_RETRIES} tentatives")
-                    raise
+def save_checkpoint(endpoint, page):
+    with open(checkpoint_file(endpoint), "w", encoding="utf-8") as fp:
+        json.dump({"page": page}, fp, indent=2)
 
-def save_raw(data: List[Dict[str, Any]]) -> pd.DataFrame:
-    logger.info("[*] Sauvegarde données brutes...")
-    df = pd.DataFrame(data)
-    df.to_csv(RAW_CSV, index=False, encoding='utf-8-sig')
-    logger.info(f"[OK] CSV : {RAW_CSV}\n")
-    return df
 
-def main() -> None:
-    fetcher = APIFetcher()
-    data = fetcher.fetch_all()
-    save_raw(data)
+# ---------------------------------------------------------
+# 3. FETCH D’UNE PAGE
+# ---------------------------------------------------------
+
+def fetch_page(endpoint, page):
+    params = {"page": page, "limit": API_LIMIT}
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            r = requests.get(f"{API_URL}/{endpoint}", params=params, timeout=API_TIMEOUT)
+            r.raise_for_status()
+            data = r.json()
+
+            if isinstance(data, dict) and "data" in data:
+                return data["data"]
+
+            logger.warning(f"[WARN] Réponse inattendue : {data}")
+            return []
+
+        except Exception as e:
+            logger.warning(f"[WARN] Tentative {attempt+1}/{MAX_RETRIES} échouée : {e}")
+            time.sleep(1)
+
+    logger.error(f"[ERROR] Impossible de fetch {endpoint} page {page}")
+    return []
+
+
+# ---------------------------------------------------------
+# 4. FETCH COMPLET D’UN ENDPOINT
+# ---------------------------------------------------------
+
+def fetch_endpoint(endpoint):
+    logger.info(f"\n=== FETCH ENDPOINT : {endpoint} ===")
+
+    cp = load_checkpoint(endpoint)
+    page = cp["page"]
+
+    all_rows = []
+    partial_file = PARTIAL_DIR / f"{endpoint}.csv"
+
+    # Reprise si fichier partiel existe
+    if partial_file.exists():
+        logger.info(f"[INFO] Reprise du fichier {partial_file}")
+        all_rows = pd.read_csv(partial_file).to_dict(orient="records")
+
+    while True:
+        rows = fetch_page(endpoint, page)
+        if not rows:
+            break
+
+        all_rows.extend(rows)
+
+        # Sauvegarde incrémentale
+        pd.DataFrame(all_rows).to_csv(partial_file, index=False, encoding="utf-8-sig")
+
+        save_checkpoint(endpoint, page)
+        page += 1
+
+    logger.info(f"[OK] Terminé : {endpoint} ({len(all_rows)} lignes)")
+    return all_rows
+
+
+# ---------------------------------------------------------
+# 5. FETCH GLOBAL PARALLÉLISÉ
+# ---------------------------------------------------------
+
+def fetch_all_parallel():
+    with ThreadPoolExecutor(max_workers=len(ENDPOINTS)) as executor:
+        futures = [executor.submit(fetch_endpoint, ep) for ep in ENDPOINTS]
+
+        for f in as_completed(futures):
+            f.result()
+
+
+# ---------------------------------------------------------
+# 6. MAIN
+# ---------------------------------------------------------
+
+def main():
+    logger.info("\n=== FETCHING MASSIF MULTI-ENDPOINTS ===\n")
+    fetch_all_parallel()
+    logger.info("\n=== FIN DU FETCHING ===\n")
+
 
 if __name__ == "__main__":
     main()

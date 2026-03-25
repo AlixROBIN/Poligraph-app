@@ -1,5 +1,9 @@
 """
-Data Mining et analyse thématique sur la branche Analytics
+Data Mining thématique sur les données Analytics enrichies
+- Détection de thèmes
+- Analyse par thème
+- Graphiques thématiques
+- Rapport thématique
 """
 
 import pandas as pd
@@ -17,11 +21,12 @@ from logger_config import setup_logger
 
 logger = setup_logger(__name__)
 
+
 class DataMiner:
-    """Analyse les données Analytics"""
+    """Analyse thématique des données Analytics enrichies"""
 
     def __init__(self, path=CLEANED_ANALYTICS_CSV):
-        logger.info(f"[FILE] Chargement Analytics : {path}")
+        logger.info(f"[FILE] Chargement Analytics enrichi : {path}")
         self.df = pd.read_csv(path)
         self.themes: Dict[str, str] = {}
 
@@ -36,22 +41,30 @@ class DataMiner:
         logger.info("[SUCCESS] Mining complet\n")
         return self.themes
 
+    # -----------------------------
+    # Détection des thèmes
+    # -----------------------------
+
     def _detect_themes(self) -> None:
         logger.info("[*] Détection des thèmes...\n")
 
         keywords = {
-            "politique": ["parti", "groupe", "fonction", "mandat"],
-            "judiciaire": ["affaire", "judiciaire", "proces", "condamnation"],
-            "factcheck": ["fact", "check", "verite", "faux", "mensonge"],
-            "transparence": ["transparence", "declaration", "patrimoine", "conflit"],
+            "politique": ["party", "institution", "position"],
+            "judiciaire": ["sentence", "verdict", "appeal", "status"],
+            "territorial": ["department", "city", "county", "constituency"],
+            "vote": ["votesFor", "votesAgainst", "votesAbstain"],
         }
 
         for theme, kwords in keywords.items():
             for col in self.df.columns:
-                if any(k in col.lower() for k in kwords):
+                if any(k.lower() in col.lower() for k in kwords):
                     self.themes[theme] = col
-                    logger.info(f"[OK] {theme} -> {col}")
+                    logger.info(f"[OK] {theme} → {col}")
                     break
+
+    # -----------------------------
+    # Analyse des thèmes
+    # -----------------------------
 
     def _analyze_themes(self) -> None:
         logger.info("\n[STATS] Statistiques globales :")
@@ -65,12 +78,16 @@ class DataMiner:
             for val, cnt in top.items():
                 logger.info(f"    {val}: {cnt}")
 
+    # -----------------------------
+    # Graphiques thématiques
+    # -----------------------------
+
     def _generate_charts(self) -> None:
         logger.info("\n[*] Génération graphiques Mining...")
 
         fig, axes = plt.subplots(2, 2, figsize=CHART_SIZE)
         fig.suptitle(
-            "Data Mining - PoliGraph (Analytics)",
+            "Data Mining - PoliGraph (Analytics enrichies)",
             fontsize=16,
             fontweight="bold",
         )
@@ -98,9 +115,13 @@ class DataMiner:
         logger.info(f"[OK] Chart : {CHART_2}")
         plt.close()
 
+    # -----------------------------
+    # Rapport
+    # -----------------------------
+
     def _save_report(self) -> None:
         with open(REPORT_MINING, "w", encoding="utf-8") as f:
-            f.write("DATA MINING - POLIGRAPH API (Analytics)\n")
+            f.write("DATA MINING - POLIGRAPH API (Analytics enrichies)\n")
             f.write("=" * 50 + "\n\n")
             f.write(f"Records: {len(self.df)}\n")
             f.write(f"Colonnes: {len(self.df.columns)}\n\n")
@@ -110,9 +131,11 @@ class DataMiner:
                 f.write(f"  Colonne: {col}\n")
                 f.write(f"  Uniques: {self.df[col].nunique()}\n")
 
+
 def main() -> None:
     miner = DataMiner()
     miner.mine()
+
 
 if __name__ == "__main__":
     main()
