@@ -6,8 +6,6 @@ const PAGES = [
   { id: "annuaire",    label: "Annuaire" },
   { id: "exploration", label: "Exploration" },
   { id: "journal",     label: "Journal" },
-  { id: "predict",     label: "Prédictions" },
-  { id: "chat",        label: "PoliBot 🤖" },
 ];
 
 const Navbar = ({ currentPage, onPageChange }) => (

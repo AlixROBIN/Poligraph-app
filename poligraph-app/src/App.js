@@ -3,10 +3,9 @@ import Navbar from "./components/Navbar";
 import Dashboard from "./components/Dashboard";
 import ExplorationPage from "./components/ExplorationPage";
 import ThemeAnalysis from "./components/ThemeAnalysis";
-import PredictPage from "./components/PredictPage";
 import AnnuairePage from "./components/AnnuairePage";
 import JournalPage from "./components/JournalPage";
-import ChatPage from "./components/ChatPage";
+import ChatWidget from "./components/ChatPage";
 import "./styles/global.css";
 
 function App() {
@@ -26,10 +25,9 @@ function App() {
         {page === "exploration" && <ExplorationPage key={JSON.stringify(explorationFilters)} initialFilters={explorationFilters} />}
         {page === "themes"      && <ThemeAnalysis />}
         {page === "journal"     && <JournalPage />}
-        {page === "predict"     && <PredictPage />}
         {page === "annuaire"    && <AnnuairePage onNavigate={navigate} />}
-        {page === "chat"        && <ChatPage />}
       </main>
+      <ChatWidget />
     </div>
   );
 }
