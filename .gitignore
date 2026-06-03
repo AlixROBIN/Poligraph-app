@@ -1,7 +1,21 @@
-# --- Données / artefacts générés (régénérés par le pipeline) ---
+# --- Données brutes (volumineuses, non committées) ---
 data/
-output/
 logs/
+
+# --- Artefacts ML lourds (régénérés par le pipeline) ---
+output/vectors/
+output/models/
+output/hf-cache/
+output/spark-ivy-cache/
+output/spark-checkpoint/
+output/similarity/
+output/stream_snapshot.parquet
+output/*.png
+output/*.txt
+
+# Les fichiers analytics et dashboard sont committés (nécessaires en prod)
+# output/analytics/ → inclus
+# output/dashboard/ → inclus
 
 # --- Environnements Python ---
 __pycache__/

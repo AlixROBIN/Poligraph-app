@@ -1,0 +1,25 @@
+{
+    "total_elections": 10,
+    "par_type": {
+        "MUNICIPALES": 3,
+        "LEGISLATIVES": 2,
+        "EUROPEENNES": 1,
+        "REGIONALES": 1,
+        "DEPARTEMENTALES": 1,
+        "PRESIDENTIELLE": 1,
+        "SENATORIALES": 1
+    },
+    "par_statut": {
+        "UPCOMING": 6,
+        "COMPLETED": 3,
+        "CANDIDACIES": 1
+    },
+    "par_annee": {
+        "2014": 1,
+        "2020": 1,
+        "2024": 1,
+        "2026": 2,
+        "2027": 1,
+        "Non ": 4
+    }
+}
