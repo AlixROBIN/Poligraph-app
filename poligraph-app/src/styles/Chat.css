@@ -245,6 +245,7 @@
 .tool-stat  { background: #2a1a40; color: #c490ff; }
 .tool-press { background: #1a2a10; color: #8de060; }
 .tool-elu   { background: #2a1830; color: #ff90c8; }
+.tool-cross { background: #1a2a1a; color: #a0e890; }
 
 .step-arrow  { color: #3a3a50; }
 .step-toggle { color: #444; font-size: 0.68rem; padding: 0 3px; }

@@ -617,7 +617,7 @@ const JournalPage = () => {
         display: "flex", gap: 6, flexWrap: "wrap",
         marginBottom: enriched ? 6 : "1.2rem",
         opacity: enriched ? 1 : 0.5,
-        pointerEvents: enriched ? "auto" : "none",
+        pointerEvents: "auto",
       }}>
         {[["", "Tous sentiments"], ["POSITIVE", "Positif"], ["NEGATIVE", "Négatif"], ["NEUTRAL", "Neutre"]].map(([val, lbl]) => (
           <button key={val} onClick={() => setFilterSentiment(val)}
@@ -629,18 +629,7 @@ const JournalPage = () => {
             {lbl}
           </button>
         ))}
-        {!enriched && (
-          <span style={{ fontSize: 11, color: "#bbb", alignSelf: "center", fontStyle: "italic" }}>
-            (disponible uniquement avec Kafka actif)
-          </span>
-        )}
       </div>
-      {sentimentFilterWarning && (
-        <div style={{ fontSize: 12, color: "#c0392b", background: "#fdecea",
-          padding: "6px 12px", borderRadius: 6, marginBottom: "1rem" }}>
-          Le filtrage par sentiment n'est pas disponible en mode RSS direct. Tous les articles sont affichés.
-        </div>
-      )}
 
       {/* Liste articles */}
       {loading ? (

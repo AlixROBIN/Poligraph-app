@@ -1,0 +1,29 @@
+# ── Production Render (sans PySpark/torch — trop lourds pour le tier gratuit) ──
+
+# API & Web
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+websockets>=12.0
+pydantic>=2.0.0
+requests==2.31.0
+
+# Data
+pandas>=2.2.0
+numpy>=2.0.0
+pyarrow>=15.0.0
+
+# Machine Learning
+scikit-learn>=1.4.0
+
+# Scraping RSS
+feedparser>=6.0.10
+
+# Sentiment (VADER — léger, sans torch)
+vaderSentiment>=3.3.2
+
+# Agent LLM
+groq>=0.11.0
+python-dotenv>=1.0.0
+
+# Kafka (optionnel — désactivé si KAFKA_BOOTSTRAP_SERVERS absent)
+kafka-python>=2.0.2

@@ -4,11 +4,12 @@ import "../styles/Chat.css";
 const BASE_URL = (process.env.REACT_APP_API_URL || "http://localhost:8000") + "/api";
 
 const TOOL_META = {
-  search_scandales:      { label: "Base données · Scandales", icon: "🗄️", color: "tool-db" },
-  search_votes:          { label: "Base données · Votes",     icon: "🗳️", color: "tool-db" },
-  get_statistics:        { label: "Statistiques agrégées",    icon: "📊", color: "tool-stat" },
-  get_recent_articles:   { label: "Presse récente",           icon: "📰", color: "tool-press" },
-  get_politician_profile:{ label: "Profil élu",               icon: "👤", color: "tool-elu" },
+  search_scandales:        { label: "Base données · Scandales",  icon: "🗄️", color: "tool-db" },
+  search_votes:            { label: "Base données · Votes",      icon: "🗳️", color: "tool-db" },
+  get_statistics:          { label: "Statistiques agrégées",     icon: "📊", color: "tool-stat" },
+  get_recent_articles:     { label: "Presse récente",            icon: "📰", color: "tool-press" },
+  get_politician_profile:  { label: "Profil élu",                icon: "👤", color: "tool-elu" },
+  analyze_political_figure:{ label: "Analyse croisée Presse×DB", icon: "🔬", color: "tool-cross" },
 };
 
 const SUGGESTIONS = [

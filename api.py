@@ -652,7 +652,7 @@ def _scrape_rss_cached() -> list[dict]:
                 articles.append({
                     "id":              hashlib.sha256(link.encode()).hexdigest()[:16],
                     "title":           _strip_html(entry.get("title", "")),
-                    "summary":         _strip_html(entry.get("summary", "") or "")[:300],
+                    "summary":         _strip_html(entry.get("summary", "") or "")[:800],
                     "source":          source,
                     "source_label":    SOURCE_LABELS.get(source, source),
                     "url":             link,
@@ -726,9 +726,11 @@ def journal(n: int = 100, source: str = "", sentiment: str = ""):
 
     if source:
         articles = [a for a in articles if a["source"] == source]
-    # Sentiment filter only applies when articles are enriched by Spark
+
+    # Filtre sentiment : fonctionne dès que les articles ont un label (Kafka ou VADER/RSS)
     sentiment_filter_applied = False
-    if sentiment and enriched:
+    has_sentiment = any(a.get("sentiment_label") for a in articles)
+    if sentiment and has_sentiment:
         articles = [a for a in articles if a.get("sentiment_label") == sentiment]
         sentiment_filter_applied = True
 
@@ -736,10 +738,10 @@ def journal(n: int = 100, source: str = "", sentiment: str = ""):
     articles.reverse()
 
     return {
-        "articles":               articles,
-        "total":                  len(articles),
-        "kafka_available":        kafka_up,
-        "enriched":               enriched,
+        "articles":                articles,
+        "total":                   len(articles),
+        "kafka_available":         kafka_up,
+        "enriched":                enriched or has_sentiment,
         "sentiment_filter_active": sentiment_filter_applied,
     }
 
@@ -1067,6 +1069,26 @@ AGENT_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_political_figure",
+            "description": (
+                "Analyse croisée complète d'un personnage politique : "
+                "articles de presse récents (avec sentiment et mots-clés) + affaires dans la base de données + profil élu. "
+                "C'est l'outil principal pour répondre à des questions sur une personnalité politique spécifique, "
+                "analyser sa situation médiatique, spéculer sur son avenir politique ou comparer presse et réalité judiciaire."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name":  {"type": "string", "description": "Nom complet ou partiel du politicien (ex: 'Marine Le Pen', 'Macron', 'Mélenchon')"},
+                    "parti": {"type": "string", "description": "Parti politique pour affiner (optionnel, ex: RN, LFI, LREM)"},
+                },
+                "required": ["name"],
+            },
+        },
+    },
 ]
 
 
@@ -1159,16 +1181,30 @@ def _tool_get_statistics(type: str):
         return {"erreur": str(e)}
 
 
+def _articles_matching(articles: list[dict], q: str) -> list[dict]:
+    """Recherche multi-mots tolérante : chaque mot de q doit apparaître dans titre OU résumé."""
+    if not q:
+        return articles
+    words = [w.lower() for w in q.split() if len(w) > 2]
+    if not words:
+        return articles
+    result = []
+    for a in articles:
+        text = (a.get("title", "") + " " + a.get("summary", "")).lower()
+        if any(w in text for w in words):
+            result.append(a)
+    return result
+
+
 def _tool_get_recent_articles(q="", limit=8):
     try:
         articles = _scrape_rss_cached()
         if q:
-            ql = q.lower()
-            articles = [a for a in articles
-                        if ql in a.get("title", "").lower() or ql in a.get("summary", "").lower()]
+            articles = _articles_matching(articles, q)
         limit = min(int(limit), 20)
         return {
             "total_trouvé": len(articles),
+            "note": "Résumés jusqu'à 800 caractères. Utilisez analyze_political_figure pour un croisement avec la base de données.",
             "articles": [
                 {
                     "titre":      a.get("title", ""),
@@ -1177,6 +1213,7 @@ def _tool_get_recent_articles(q="", limit=8):
                     "url":        a.get("url", ""),
                     "publié_le":  a.get("published_at", ""),
                     "sentiment":  a.get("sentiment_label"),
+                    "score":      a.get("sentiment"),
                 }
                 for a in articles[:limit]
             ],
@@ -1205,13 +1242,109 @@ def _tool_get_politician_profile(name: str, parti: str = ""):
         return {"erreur": str(e)}
 
 
+def _tool_analyze_political_figure(name: str, parti: str = ""):
+    """
+    Analyse croisée complète : presse récente × scandales DB × profil élu.
+    Retourne un rapport structuré avec sentiment médiatique, affaires connues
+    et contexte politique — permet à l'agent de spéculer avec des données factuelles.
+    """
+    result = {"personnage_recherché": name, "presse": {}, "scandales": {}, "profil": {}}
+
+    # ── 1. Presse récente ─────────────────────────────────────────────────
+    articles = _scrape_rss_cached()
+    relevant = _articles_matching(articles, name)
+
+    if relevant:
+        scores = [a["sentiment"] for a in relevant if a.get("sentiment") is not None]
+        moy = round(sum(scores) / len(scores), 3) if scores else None
+        label = ("POSITIVE" if moy and moy > 0.05
+                 else "NEGATIVE" if moy and moy < -0.05
+                 else "NEUTRAL")
+
+        # Mots-clés fréquents dans les titres (hors stop-words basiques)
+        stop = {"le","la","les","de","du","des","un","une","en","et","à","est","il","elle",
+                "qui","que","pour","sur","par","au","aux","ce","se","sa","son","ses","dans"}
+        word_freq: dict = {}
+        for a in relevant:
+            for w in re.findall(r"\b[a-zàâéèêëîïôùûüç]{4,}\b", a.get("title","").lower()):
+                if w not in stop:
+                    word_freq[w] = word_freq.get(w, 0) + 1
+        top_kw = sorted(word_freq, key=lambda w: -word_freq[w])[:10]
+
+        result["presse"] = {
+            "nb_articles_trouvés": len(relevant),
+            "sentiment_moyen":     moy,
+            "tonalité_médiatique": label,
+            "mots_clés_dominants": top_kw,
+            "articles": [
+                {
+                    "titre":     a.get("title", ""),
+                    "résumé":    a.get("summary", ""),
+                    "source":    a.get("source_label", ""),
+                    "sentiment": a.get("sentiment_label"),
+                    "score":     a.get("sentiment"),
+                    "url":       a.get("url", ""),
+                    "date":      a.get("published_at", ""),
+                }
+                for a in relevant[:10]
+            ],
+        }
+    else:
+        result["presse"] = {
+            "nb_articles_trouvés": 0,
+            "message": (
+                f"Aucun article récent trouvé mentionnant '{name}'. "
+                "Les flux RSS couvrent Le Monde, Le Figaro, Libération, France Info, Le Point. "
+                "La personne peut être mentionnée sous un prénom/surnom différent."
+            ),
+        }
+
+    # ── 2. Scandales dans la DB ───────────────────────────────────────────
+    try:
+        sc = pd.read_csv(ANALYTICS_DIR / "scandales_features.csv", low_memory=False)
+        # Cherche par nom complet ou parties du nom
+        name_parts = [p for p in name.split() if len(p) > 2]
+        mask = sc["politician_name"].fillna("").str.contains(name, case=False, na=False)
+        for part in name_parts:
+            mask |= sc["politician_name"].fillna("").str.contains(part, case=False, na=False)
+        if parti:
+            mask &= sc["party_short"].fillna("").str.contains(parti, case=False, na=False)
+        found = sc[mask]
+        cols = ["title", "category", "status", "annee_faits", "party_short",
+                "sentence", "appeal", "description"]
+        cols = [c for c in cols if c in found.columns]
+        result["scandales"] = {
+            "total_affaires": len(found),
+            "catégories": found["category"].value_counts().to_dict() if not found.empty else {},
+            "statuts":    found["status"].value_counts().to_dict()   if not found.empty else {},
+            "affaires":   found[cols].head(8).fillna("").to_dict(orient="records"),
+        }
+    except Exception as e:
+        result["scandales"] = {"erreur": str(e)}
+
+    # ── 3. Profil élu ─────────────────────────────────────────────────────
+    result["profil"] = _tool_get_politician_profile(name, parti)
+
+    # ── 4. Synthèse pour l'agent ──────────────────────────────────────────
+    nb_art = result["presse"].get("nb_articles_trouvés", 0)
+    nb_sc  = result["scandales"].get("total_affaires", 0)
+    result["synthèse_agent"] = (
+        f"{'%d article(s) de presse récent(s)' % nb_art if nb_art else 'Aucun article récent'} "
+        f"— {'%d affaire(s) dans la base' % nb_sc if nb_sc else 'aucune affaire dans la base'}. "
+        f"Tonalité médiatique : {result['presse'].get('tonalité_médiatique', 'N/A')}. "
+        "Croise ces données pour formuler une analyse argumentée."
+    )
+    return result
+
+
 def _execute_agent_tool(tool_name: str, tool_input: dict) -> dict:
     dispatch = {
-        "search_scandales":      _tool_search_scandales,
-        "search_votes":          _tool_search_votes,
-        "get_statistics":        _tool_get_statistics,
-        "get_recent_articles":   _tool_get_recent_articles,
-        "get_politician_profile": _tool_get_politician_profile,
+        "search_scandales":        _tool_search_scandales,
+        "search_votes":            _tool_search_votes,
+        "get_statistics":          _tool_get_statistics,
+        "get_recent_articles":     _tool_get_recent_articles,
+        "get_politician_profile":  _tool_get_politician_profile,
+        "analyze_political_figure": _tool_analyze_political_figure,
     }
     fn = dispatch.get(tool_name)
     if fn is None:
@@ -1222,15 +1355,31 @@ def _execute_agent_tool(tool_name: str, tool_input: dict) -> dict:
         return {"erreur": f"Paramètres invalides pour {tool_name} : {e}"}
 
 
-_AGENT_SYSTEM = (
-    "Tu es PoliBot, un assistant spécialisé dans l'analyse de la politique française. "
-    "Tu as accès à une base de données complète sur les scandales politiques français, "
-    "les votes parlementaires, les profils des élus, et les articles de presse récents "
-    "(Le Monde, Le Figaro, Libération, France Info, Le Point). "
-    "Utilise systématiquement les outils disponibles pour répondre avec précision. "
-    "Quand tu spécules, indique-le clairement. "
-    "Réponds toujours en français. Sois factuel, analytique et nuancé."
-)
+_AGENT_SYSTEM = """Tu es PoliBot, un agent d'analyse politique française doté de plusieurs sources de données.
+
+## Tes sources de données
+- **Base de données** : scandales politiques, votes parlementaires, profils d'élus
+- **Presse en temps réel** : Le Monde, Le Figaro, Libération, France Info, Le Point (flux RSS actualisés)
+
+## Règle fondamentale : toujours croiser les sources
+Pour toute question sur un personnage politique ou une situation politique :
+1. Utilise **analyze_political_figure** en premier — il croise automatiquement presse + DB + profil
+2. Complète si besoin avec **search_scandales** ou **search_votes**
+3. Formule une analyse argumentée en combinant les deux sources
+
+## Comment analyser et spéculer
+- Si la presse parle d'un sujet ET que la DB contient des données connexes → croise-les explicitement
+- Si des articles récents mentionnent un débat, une affaire ou une décision → cite-les avec leur source
+- Tu peux et dois **spéculer et formuler des hypothèses** basées sur les données disponibles
+  - Commence par : "D'après les articles récents…", "Selon la base de données…", "En croisant les deux sources…"
+  - Conclus par une analyse personnelle clairement marquée : "Mon analyse :", "Il est probable que…", "On peut estimer que…"
+- Ne dis JAMAIS "je n'ai pas d'information" sans avoir d'abord utilisé analyze_political_figure
+
+## Format de réponse
+- Toujours en français
+- Structure : [données factuelles] → [croisement presse × DB] → [analyse/spéculation argumentée]
+- Cite les sources (nom du journal, date si disponible)
+- Mentionne le sentiment médiatique quand il est disponible (positif/négatif/neutre)"""
 
 _GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
