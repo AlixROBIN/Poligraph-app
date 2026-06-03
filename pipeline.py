@@ -1,49 +1,73 @@
 """
-PoliGraph Data Analysis - Pipeline Principal
-Branche Analytics + branche ML diamant
+pipeline.py — Orchestrateur principal
+Lance tout dans l'ordre : preprocess → vectorize → train
+
+Usage :
+  python pipeline.py                    # pandas (défaut)
+  python pipeline.py --engine spark     # PySpark
+  python pipeline.py --step pre         # preprocess seulement
+  python pipeline.py --step vec         # vectorize seulement
+  python pipeline.py --step train       # entraînement seulement
+  python pipeline.py --step pre --engine spark
 """
 
+import argparse
 import sys
-from logger_config import setup_logger
+import time
+from pathlib import Path
 
-logger = setup_logger(__name__)
+sys.path.insert(0, str(Path(__file__).parent / "pipeline"))
 
-STEPS = [
-    ("1 - Récupération", "fetching"),
-    ("2 - Exploration (RAW)", "exploration"),
-    ("3 - Nettoyage Analytics", "cleaning_analytics"),
-    ("4 - Data Mining (Analytics)", "mining"),
-    ("5 - Nettoyage ML Diamant", "cleaning_ml"),
-]
+import pipeline.preprocess as preprocess
+import pipeline.train_elus as train_elus
+import pipeline.train_scandales as train_scandales
+import pipeline.train_votes as train_votes
+import pipeline.vectorize as vectorize
 
-def run_pipeline() -> bool:
-    logger.info("\n" + "=" * 80)
-    logger.info("[PIPELINE] POLIGRAPH DATA ANALYSIS")
-    logger.info("=" * 80 + "\n")
 
-    for step_name, module_name in STEPS:
-        logger.info(f"ETAPE {step_name}")
-        logger.info("-" * 80)
+def run_step(name, fn):
+    print(f"\n{'='*60}")
+    print(f"  ÉTAPE : {name}")
+    print(f"{'='*60}")
+    t0 = time.time()
+    fn()
+    print(f"\n  ✓ {name} terminé en {time.time()-t0:.1f}s")
 
-        try:
-            module = __import__(module_name)
-            module.main()
-            logger.info(f"[SUCCESS] {step_name} complétée\n")
 
-        except ImportError:
-            logger.error(f"[ERROR] Module non trouvé : {module_name}")
-            return False
+def preprocess_spark():
+    from spark.batch_pipeline import main as spark_main
+    spark_main()
 
-        except Exception as e:
-            logger.error(f"[ERROR] Erreur {step_name} : {str(e)}")
-            logger.exception("Stack trace :")
-            return False
 
-    logger.info("=" * 80)
-    logger.info("[SUCCESS] PIPELINE COMPLET (Analytics + ML) !")
-    logger.info("=" * 80 + "\n")
-    return True
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--step", choices=["pre", "vec", "train", "all"], default="all")
+    parser.add_argument(
+        "--engine",
+        choices=["pandas", "spark"],
+        default="pandas",
+        help="pandas (défaut, sklearn compatible) ou spark (PySpark, requiert Java 11+)",
+    )
+    args = parser.parse_args()
+
+    pre_fn = preprocess_spark if args.engine == "spark" else preprocess.main
+    pre_label = "Preprocessing (PySpark)" if args.engine == "spark" else "Preprocessing (pandas)"
+
+    steps = {
+        "pre":   (pre_label,       pre_fn),
+        "vec":   ("Vectorisation", vectorize.main),
+        "train": ("Entraînement",  lambda: (train_scandales.main(), train_votes.main(), train_elus.main())),
+    }
+
+    if args.step == "all":
+        for key in ["pre", "vec", "train"]:
+            run_step(*steps[key])
+    else:
+        run_step(*steps[args.step])
+
+    print("\n Pipeline complet ✓")
+    print("  Prédictions : python pipeline/predict.py --mode [vote|category|politician]")
+
 
 if __name__ == "__main__":
-    success = run_pipeline()
-    sys.exit(0 if success else 1)
+    main()

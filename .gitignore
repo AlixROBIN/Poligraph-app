@@ -1,27 +1,35 @@
-# --- Dossiers à exclure ---
+# --- Données / artefacts générés (régénérés par le pipeline) ---
 data/
+output/
 logs/
+
+# --- Environnements Python ---
 __pycache__/
 env/
 venv/
 .ipynb_checkpoints/
-
-# --- Fichiers temporaires ---
-*.log
-*.tmp
-*.bak
-
-# --- Fichiers Python ---
 *.pyc
 *.pyo
 *.pyd
+
+# --- Fichiers temporaires / accidentels ---
+*.log
+*.tmp
+*.bak
+=*/
+=?.?.?
+=??.?.?
+
+# --- Secrets ---
+.env
+
+# --- Outils internes ---
+.claude/
 
 # --- OS ---
 .DS_Store
 Thumbs.db
 
-# --- VSCode ---
+# --- IDE ---
 .vscode/
-
-# --- PyCharm ---
 .idea/

@@ -1,19 +1,34 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import Navbar from "./components/Navbar";
 import Dashboard from "./components/Dashboard";
 import ExplorationPage from "./components/ExplorationPage";
 import ThemeAnalysis from "./components/ThemeAnalysis";
+import PredictPage from "./components/PredictPage";
+import AnnuairePage from "./components/AnnuairePage";
+import JournalPage from "./components/JournalPage";
+import ChatPage from "./components/ChatPage";
 import "./styles/global.css";
 
 function App() {
   const [page, setPage] = useState("dashboard");
+  const [explorationFilters, setExplorationFilters] = useState({});
+
+  const navigate = (targetPage, filters = {}) => {
+    setExplorationFilters(filters);
+    setPage(targetPage);
+  };
+
   return (
     <div className="app">
-      <Navbar currentPage={page} onPageChange={setPage} />
+      <Navbar currentPage={page} onPageChange={(p) => navigate(p)} />
       <main className="main-content">
-        {page === "dashboard" && <Dashboard />}
-        {page === "exploration" && <ExplorationPage />}
-        {page === "themes" && <ThemeAnalysis />}
+        {page === "dashboard"   && <Dashboard onNavigate={navigate} />}
+        {page === "exploration" && <ExplorationPage key={JSON.stringify(explorationFilters)} initialFilters={explorationFilters} />}
+        {page === "themes"      && <ThemeAnalysis />}
+        {page === "journal"     && <JournalPage />}
+        {page === "predict"     && <PredictPage />}
+        {page === "annuaire"    && <AnnuairePage onNavigate={navigate} />}
+        {page === "chat"        && <ChatPage />}
       </main>
     </div>
   );
