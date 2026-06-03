@@ -61,6 +61,11 @@ _models          = {}
 _feature_consumer = None
 _raw_consumer     = None
 
+# Cache DataFrames analytics (évite de relire les CSV à chaque appel outil)
+_df_scandales: pd.DataFrame | None = None
+_df_votes:     pd.DataFrame | None = None
+_df_elus:      pd.DataFrame | None = None
+
 
 # ============================================================
 # Startup
@@ -101,25 +106,44 @@ def start_kafka_consumer():
 
 @app.on_event("startup")
 def load_data():
-    global df
-    # Priorité : parquet → CSV analytics → CSV data → DataFrame vide
+    global df, _df_scandales, _df_votes, _df_elus
     sc_path = ANALYTICS_DIR / "scandales_features.csv"
+    vt_path = ANALYTICS_DIR / "votes_features.csv"
+    el_path = ANALYTICS_DIR / "elus_features.csv"
+
+    # Scandales (sert aussi comme df principal)
     if sc_path.exists():
-        df = pd.read_csv(sc_path, low_memory=False)
-        logger.info(f"[API] Données chargées depuis scandales_features.csv : {len(df)} lignes")
-        return
-    try:
-        df = pd.read_parquet(CLEANED_ANALYTICS_PARQUET)
-        logger.info(f"[API] Données chargées depuis parquet : {len(df)} lignes")
-    except Exception as e:
-        logger.warning(f"[API] Parquet introuvable : {e}")
-        csv_path = ROOT_DIR / "data/cleaned_analytics.csv"
-        if csv_path.exists():
-            df = pd.read_csv(csv_path, low_memory=False)
-            logger.info(f"[API] Données chargées depuis CSV data : {len(df)} lignes")
-        else:
-            df = pd.DataFrame()
-            logger.warning("[API] Aucune donnée trouvée — DataFrame vide")
+        _df_scandales = pd.read_csv(sc_path, low_memory=False)
+        df = _df_scandales
+        logger.info(f"[API] scandales chargés : {len(_df_scandales)} lignes")
+    else:
+        try:
+            df = pd.read_parquet(CLEANED_ANALYTICS_PARQUET)
+            _df_scandales = df
+            logger.info(f"[API] Données chargées depuis parquet : {len(df)} lignes")
+        except Exception as e:
+            logger.warning(f"[API] Parquet introuvable : {e}")
+            csv_path = ROOT_DIR / "data/cleaned_analytics.csv"
+            if csv_path.exists():
+                df = pd.read_csv(csv_path, low_memory=False)
+                _df_scandales = df
+            else:
+                df = pd.DataFrame()
+                _df_scandales = df
+                logger.warning("[API] Aucune donnée trouvée — DataFrame vide")
+
+    # Votes & élus — chargés une seule fois en mémoire
+    if vt_path.exists():
+        _df_votes = pd.read_csv(vt_path, low_memory=False)
+        logger.info(f"[API] votes chargés : {len(_df_votes)} lignes")
+    else:
+        _df_votes = pd.DataFrame()
+
+    if el_path.exists():
+        _df_elus = pd.read_csv(el_path, low_memory=False)
+        logger.info(f"[API] élus chargés : {len(_df_elus)} lignes")
+    else:
+        _df_elus = pd.DataFrame()
 
 
 def get_model(name: str):
@@ -1095,7 +1119,8 @@ AGENT_TOOLS = [
 def _tool_search_scandales(q="", category="", parti="", statut="",
                             annee_min=0, annee_max=9999, limit=10):
     try:
-        sc = pd.read_csv(ANALYTICS_DIR / "scandales_features.csv", low_memory=False)
+        sc = _df_scandales if _df_scandales is not None else pd.read_csv(ANALYTICS_DIR / "scandales_features.csv", low_memory=False)
+        sc = sc.copy()
         if q:
             mask = (
                 sc["title"].fillna("").str.contains(q, case=False, na=False) |
@@ -1125,7 +1150,8 @@ def _tool_search_scandales(q="", category="", parti="", statut="",
 
 def _tool_search_votes(q="", result="", annee=0, limit=10):
     try:
-        vt = pd.read_csv(ANALYTICS_DIR / "votes_features.csv", low_memory=False)
+        vt = _df_votes if _df_votes is not None else pd.read_csv(ANALYTICS_DIR / "votes_features.csv", low_memory=False)
+        vt = vt.copy()
         if q:
             vt = vt[vt["title"].fillna("").str.contains(q, case=False, na=False)]
         if result:
@@ -1143,38 +1169,37 @@ def _tool_search_votes(q="", result="", annee=0, limit=10):
 
 def _tool_get_statistics(type: str):
     try:
+        sc = _df_scandales if _df_scandales is not None else pd.DataFrame()
+        vt = _df_votes     if _df_votes     is not None else pd.DataFrame()
+        el = _df_elus      if _df_elus      is not None else pd.DataFrame()
+
         if type == "scandales":
-            sc = pd.read_csv(ANALYTICS_DIR / "scandales_features.csv", low_memory=False)
             return {
                 "total": len(sc),
-                "par_catégorie": sc["category"].value_counts().head(10).to_dict(),
-                "par_parti":     sc["party_short"].value_counts().head(10).to_dict(),
-                "par_statut":    sc["status"].value_counts().to_dict(),
+                "par_catégorie": sc["category"].value_counts().head(10).to_dict() if "category" in sc.columns else {},
+                "par_parti":     sc["party_short"].value_counts().head(10).to_dict() if "party_short" in sc.columns else {},
+                "par_statut":    sc["status"].value_counts().to_dict() if "status" in sc.columns else {},
             }
         if type == "votes":
-            vt = pd.read_csv(ANALYTICS_DIR / "votes_features.csv", low_memory=False)
             return {
-                "total":       len(vt),
-                "par_résultat": vt["result"].value_counts().to_dict(),
-                "par_année":   (
+                "total":        len(vt),
+                "par_résultat": vt["result"].value_counts().to_dict() if "result" in vt.columns else {},
+                "par_année":    (
                     vt["annee_vote"].dropna()
                     .pipe(lambda s: pd.to_numeric(s, errors="coerce").dropna())
                     .astype(int).value_counts().sort_index().to_dict()
-                ),
+                ) if "annee_vote" in vt.columns else {},
             }
         if type == "partis":
-            el = pd.read_csv(ANALYTICS_DIR / "elus_features.csv", low_memory=False)
-            sc = pd.read_csv(ANALYTICS_DIR / "scandales_features.csv", low_memory=False)
             return {
-                "partis_élus":      el["party_short"].value_counts().head(15).to_dict(),
-                "partis_scandales": sc["party_short"].value_counts().head(15).to_dict(),
+                "partis_élus":      el["party_short"].value_counts().head(15).to_dict() if "party_short" in el.columns else {},
+                "partis_scandales": sc["party_short"].value_counts().head(15).to_dict() if "party_short" in sc.columns else {},
             }
         if type == "elus":
-            el = pd.read_csv(ANALYTICS_DIR / "elus_features.csv", low_memory=False)
             return {
                 "total":           len(el),
-                "par_institution": el["institution"].value_counts().head(10).to_dict(),
-                "par_parti":       el["party_short"].value_counts().head(15).to_dict(),
+                "par_institution": el["institution"].value_counts().head(10).to_dict() if "institution" in el.columns else {},
+                "par_parti":       el["party_short"].value_counts().head(15).to_dict() if "party_short" in el.columns else {},
             }
         return {"erreur": f"Type inconnu : {type}"}
     except Exception as e:
@@ -1224,10 +1249,12 @@ def _tool_get_recent_articles(q="", limit=8):
 
 def _tool_get_politician_profile(name: str, parti: str = ""):
     try:
-        el_path = ANALYTICS_DIR / "elus_features.csv"
-        if not el_path.exists():
-            return {"erreur": "Base élus non disponible"}
-        el = pd.read_csv(el_path, low_memory=False)
+        el = _df_elus if (_df_elus is not None and not _df_elus.empty) else None
+        if el is None:
+            el_path = ANALYTICS_DIR / "elus_features.csv"
+            if not el_path.exists():
+                return {"erreur": "Base élus non disponible"}
+            el = pd.read_csv(el_path, low_memory=False)
         mask = el["fullName"].fillna("").str.contains(name, case=False, na=False)
         if parti:
             mask &= el["party_short"].fillna("").str.contains(parti, case=False, na=False)
@@ -1301,7 +1328,7 @@ def _tool_analyze_political_figure(name: str, parti: str = ""):
 
     # ── 2. Scandales dans la DB ───────────────────────────────────────────
     try:
-        sc = pd.read_csv(ANALYTICS_DIR / "scandales_features.csv", low_memory=False)
+        sc = _df_scandales if (_df_scandales is not None and not _df_scandales.empty) else pd.read_csv(ANALYTICS_DIR / "scandales_features.csv", low_memory=False)
         # Cherche par nom complet ou parties du nom
         name_parts = [p for p in name.split() if len(p) > 2]
         mask = sc["politician_name"].fillna("").str.contains(name, case=False, na=False)
@@ -1404,13 +1431,13 @@ def chat_endpoint(req: ChatRequest):
 
     steps = []
 
-    for _ in range(10):  # max 10 itérations ReAct
+    for _ in range(6):  # max 6 itérations ReAct (Render timeout 30s)
         response = client.chat.completions.create(
             model=_GROQ_MODEL,
             messages=messages,
             tools=AGENT_TOOLS,
             tool_choice="auto",
-            max_tokens=4096,
+            max_tokens=2048,
             temperature=0.3,
         )
 
