@@ -29,11 +29,11 @@ if ($Teardown) {
 # ── Prerequis ─────────────────────────────────────────────────────────────────
 Write-Step "0" "Verification des prerequis"
 
-$dockerInfo = docker info 2>&1
+docker info > $null
 if ($LASTEXITCODE -ne 0) { Write-Fail "Docker Desktop n'est pas demarre." }
 Write-OK "Docker Desktop actif"
 
-$kubeInfo = kubectl cluster-info 2>&1
+kubectl cluster-info > $null
 if ($LASTEXITCODE -ne 0) { Write-Fail "Kubernetes non disponible. Active-le dans Docker Desktop > Settings > Kubernetes > Enable Kubernetes." }
 Write-OK "kubectl connecte au cluster"
 
