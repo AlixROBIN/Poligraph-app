@@ -1484,6 +1484,114 @@ def chat_endpoint(req: ChatRequest):
     return {"response": "Limite d'itérations atteinte.", "steps": steps}
 
 
+@app.post("/api/chat/stream")
+async def chat_stream_endpoint(req: ChatRequest):
+    """
+    Variante SSE de /api/chat — stream les étapes ReAct au client en temps réel.
+    Contourne le timeout HTTP 30s de Render : la connexion streaming reste ouverte.
+    Chaque étape (outil appelé) est envoyée dès qu'elle est disponible.
+    """
+    client = _get_groq()
+    loop   = asyncio.get_event_loop()
+
+    async def generate():
+        messages = [{"role": "system", "content": _AGENT_SYSTEM}]
+        messages += [m for m in req.history if m.get("role") in ("user", "assistant", "tool")]
+        messages.append({"role": "user", "content": req.message})
+        steps = []
+
+        try:
+            for _ in range(6):
+                # Appel Groq synchrone exécuté dans un thread pour ne pas bloquer l'event loop
+                captured = {"msgs": list(messages)}
+                response = await loop.run_in_executor(
+                    None,
+                    lambda: client.chat.completions.create(
+                        model=_GROQ_MODEL,
+                        messages=captured["msgs"],
+                        tools=AGENT_TOOLS,
+                        tool_choice="auto",
+                        max_tokens=2048,
+                        temperature=0.3,
+                    ),
+                )
+
+                choice  = response.choices[0]
+                message = choice.message
+
+                if choice.finish_reason == "tool_calls" and message.tool_calls:
+                    messages.append({
+                        "role":       "assistant",
+                        "content":    message.content or "",
+                        "tool_calls": [
+                            {
+                                "id":       tc.id,
+                                "type":     "function",
+                                "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                            }
+                            for tc in message.tool_calls
+                        ],
+                    })
+
+                    for tc in message.tool_calls:
+                        try:
+                            args = json.loads(tc.function.arguments)
+                        except json.JSONDecodeError:
+                            args = {}
+
+                        result = _execute_agent_tool(tc.function.name, args)
+                        step   = {"outil": tc.function.name, "paramètres": args, "résultat": result}
+                        steps.append(step)
+
+                        # Envoyer l'étape immédiatement au client
+                        yield (
+                            "data: "
+                            + json.dumps({"type": "step", "step": step}, ensure_ascii=False, default=str)
+                            + "\n\n"
+                        )
+
+                        messages.append({
+                            "role":         "tool",
+                            "tool_call_id": tc.id,
+                            "content":      json.dumps(result, ensure_ascii=False, default=str),
+                        })
+
+                else:
+                    yield (
+                        "data: "
+                        + json.dumps(
+                            {"type": "done", "response": message.content or "", "steps": steps},
+                            ensure_ascii=False,
+                            default=str,
+                        )
+                        + "\n\n"
+                    )
+                    return
+
+            yield (
+                "data: "
+                + json.dumps(
+                    {"type": "done", "response": "Limite d'itérations atteinte.", "steps": steps},
+                    ensure_ascii=False,
+                )
+                + "\n\n"
+            )
+
+        except Exception as exc:
+            yield "data: " + json.dumps({"type": "error", "message": str(exc)}) + "\n\n"
+
+    from fastapi.responses import StreamingResponse as _SR
+    return _SR(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control":    "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection":       "keep-alive",
+        },
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
