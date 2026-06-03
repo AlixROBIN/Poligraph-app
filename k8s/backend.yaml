@@ -71,44 +71,6 @@ spec:
             limits:
               memory: "1Gi"
               cpu: "1"
-          volumeMounts:
-            - name: api-code
-              mountPath: /app/api.py
-            - name: pipeline-code
-              mountPath: /app/pipeline
-            - name: streaming-code
-              mountPath: /app/streaming
-            - name: data
-              mountPath: /app/data
-            - name: output
-              mountPath: /app/output
-            - name: logs
-              mountPath: /app/logs
-      volumes:
-        - name: api-code
-          hostPath:
-            path: /run/desktop/mnt/host/c/Users/alixc/Documents/inseeProject/api.py
-            type: File
-        - name: pipeline-code
-          hostPath:
-            path: /run/desktop/mnt/host/c/Users/alixc/Documents/inseeProject/pipeline
-            type: Directory
-        - name: streaming-code
-          hostPath:
-            path: /run/desktop/mnt/host/c/Users/alixc/Documents/inseeProject/streaming
-            type: Directory
-        - name: data
-          hostPath:
-            path: /run/desktop/mnt/host/c/Users/alixc/Documents/inseeProject/data
-            type: DirectoryOrCreate
-        - name: output
-          hostPath:
-            path: /run/desktop/mnt/host/c/Users/alixc/Documents/inseeProject/output
-            type: DirectoryOrCreate
-        - name: logs
-          hostPath:
-            path: /run/desktop/mnt/host/c/Users/alixc/Documents/inseeProject/logs
-            type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service
