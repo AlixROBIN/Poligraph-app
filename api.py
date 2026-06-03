@@ -613,15 +613,26 @@ def proxy_partis_detail(slug: str):
 # ============================================================
 
 SOURCE_LABELS = {
-    "lemonde":           "Le Monde",
-    "lefigaro":          "Le Figaro",
-    "liberation":        "Libération",
-    "franceinfo":        "France Info",
-    "lepoint":           "Le Point",
-    "reddit/r/france":   "Reddit · r/france",
-    "reddit/r/politique":"Reddit · r/politique",
-    "bluesky/politique": "Bluesky · Politique",
-    "bluesky/france":    "Bluesky · France",
+    # Presse
+    "lemonde":              "Le Monde",
+    "lefigaro":             "Le Figaro",
+    "liberation":           "Libération",
+    "franceinfo":           "France Info",
+    "lepoint":              "Le Point",
+    # Google News
+    "googlenews/politique": "Google News · Politique",
+    "googlenews/parlement": "Google News · Parlement",
+    # Réseaux sociaux — API ouvertes
+    "reddit/r/france":      "Reddit · r/france",
+    "reddit/r/politique":   "Reddit · r/politique",
+    "bluesky/politique":    "Bluesky · Politique",
+    "bluesky/france":       "Bluesky · France",
+    "mastodon/politique":   "Mastodon · #politique",
+    "mastodon/france":      "Mastodon · #france",
+    # Réseaux sociaux — API restreintes (nécessitent compte/token)
+    "x/politique":          "X · Politique",       # nécessite X_BEARER_TOKEN
+    "threads/politique":    "Threads · Politique",  # nécessite THREADS_TOKEN
+    "facebook/politique":   "Facebook · Politique", # nécessite FB_ACCESS_TOKEN
 }
 
 RSS_FEEDS = [
@@ -632,6 +643,12 @@ RSS_FEEDS = [
     ("lepoint",    "https://www.lepoint.fr/politique/rss.xml"),
 ]
 
+# Google News — agrège les articles les plus partagés sur les réseaux
+GOOGLE_NEWS_QUERIES = [
+    ("googlenews/politique", "politique+france"),
+    ("googlenews/parlement", "assemblée+nationale+sénat"),
+]
+
 REDDIT_SUBS = [
     ("reddit/r/france",    "france"),
     ("reddit/r/politique", "politique"),
@@ -640,6 +657,12 @@ REDDIT_SUBS = [
 BLUESKY_QUERIES = [
     ("bluesky/politique", "politique france"),
     ("bluesky/france",    "assemblée nationale"),
+]
+
+# Mastodon — instances françaises, API publique sans authentification
+MASTODON_TAGS = [
+    ("mastodon/politique", "piaille.fr",      "politique"),
+    ("mastodon/france",    "mastodon.social",  "france"),
 ]
 
 _RSS_UA = "PoliGraph/1.0 (github.com/AlixROBIN/Poligraph-app; contact: alixanniv@gmail.com)"
@@ -782,6 +805,130 @@ def _fetch_bluesky(source_key: str, query: str) -> list[dict]:
         return []
 
 
+def _fetch_google_news(source_key: str, query: str) -> list[dict]:
+    """Google News RSS — agrège les articles les plus partagés sur les réseaux sociaux."""
+    import hashlib, requests as _r
+    try:
+        url  = f"https://news.google.com/rss/search?q={query}&hl=fr&gl=FR&ceid=FR:fr"
+        feed = _fetch_feed(url)
+        articles = []
+        for entry in feed.entries[:20]:
+            link = entry.get("link") or entry.get("id") or ""
+            articles.append({
+                "id":              hashlib.sha256(link.encode()).hexdigest()[:16],
+                "title":           _strip_html(entry.get("title", "")),
+                "summary":         _strip_html(entry.get("summary", "") or "")[:800],
+                "source":          source_key,
+                "source_label":    SOURCE_LABELS.get(source_key, source_key),
+                "url":             link,
+                "published_at":    entry.get("published", ""),
+                "sentiment":       None,
+                "sentiment_label": None,
+                "entities":        [],
+                "keywords":        [],
+                "enriched":        False,
+            })
+        _metric_ok(source_key, len(articles))
+        logger.info(f"[Google News] {source_key}: {len(articles)} articles")
+        return articles
+    except Exception as exc:
+        _metric_err(source_key)
+        logger.warning(f"[Google News] {source_key} : {exc}")
+        return []
+
+
+def _fetch_mastodon(source_key: str, instance: str, hashtag: str) -> list[dict]:
+    """
+    Mastodon public timeline par hashtag — API publique, sans authentification.
+    Instances françaises actives : piaille.fr (communauté fr), mastodon.social.
+    """
+    import hashlib, requests as _r
+    try:
+        url  = f"https://{instance}/api/v1/timelines/tag/{hashtag}?limit=20"
+        resp = _r.get(url, headers={"User-Agent": _RSS_UA}, timeout=15)
+        resp.raise_for_status()
+        posts = resp.json()
+        articles = []
+        for post in posts:
+            content  = _strip_html(post.get("content", ""))
+            url_post = post.get("url", "")
+            account  = post.get("account", {})
+            display  = account.get("display_name") or account.get("username", "")
+            if len(content) < 20:   # ignorer les posts vides ou trop courts
+                continue
+            articles.append({
+                "id":              hashlib.sha256(url_post.encode()).hexdigest()[:16],
+                "title":           f"{display}: {content[:100]}",
+                "summary":         content[:800],
+                "source":          source_key,
+                "source_label":    SOURCE_LABELS.get(source_key, source_key),
+                "url":             url_post,
+                "published_at":    post.get("created_at", ""),
+                "sentiment":       None,
+                "sentiment_label": None,
+                "entities":        [],
+                "keywords":        [],
+                "enriched":        False,
+            })
+        _metric_ok(source_key, len(articles))
+        logger.info(f"[Mastodon] {source_key} (@{instance}): {len(articles)} posts")
+        return articles
+    except Exception as exc:
+        _metric_err(source_key)
+        logger.warning(f"[Mastodon] {source_key} : {exc}")
+        return []
+
+
+def _fetch_x(source_key: str, query: str) -> list[dict]:
+    """
+    X (Twitter) — nécessite X_BEARER_TOKEN (API v2, tier Basic $100/mois).
+    Si X_BEARER_TOKEN absent → silencieux (pas d'erreur).
+    Pour activer : créer une app sur developer.twitter.com et définir X_BEARER_TOKEN.
+    """
+    token = os.getenv("X_BEARER_TOKEN")
+    if not token:
+        return []   # désactivé silencieusement si pas de token
+    import hashlib, requests as _r
+    try:
+        resp = _r.get(
+            "https://api.twitter.com/2/tweets/search/recent",
+            params={
+                "query":       f"{query} lang:fr -is:retweet",
+                "max_results": 20,
+                "tweet.fields": "created_at,author_id,text",
+            },
+            headers={"Authorization": f"Bearer {token}", "User-Agent": _RSS_UA},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        tweets = resp.json().get("data", [])
+        articles = []
+        for tw in tweets:
+            text = tw.get("text", "")
+            tid  = tw.get("id", "")
+            articles.append({
+                "id":              hashlib.sha256(tid.encode()).hexdigest()[:16],
+                "title":           text[:120],
+                "summary":         text[:800],
+                "source":          source_key,
+                "source_label":    SOURCE_LABELS.get(source_key, source_key),
+                "url":             f"https://x.com/i/web/status/{tid}",
+                "published_at":    tw.get("created_at", ""),
+                "sentiment":       None,
+                "sentiment_label": None,
+                "entities":        [],
+                "keywords":        [],
+                "enriched":        False,
+            })
+        _metric_ok(source_key, len(articles))
+        logger.info(f"[X] {source_key}: {len(articles)} tweets")
+        return articles
+    except Exception as exc:
+        _metric_err(source_key)
+        logger.warning(f"[X] {source_key} : {exc}")
+        return []
+
+
 def _enrich_with_sentiment(articles: list[dict]) -> list[dict]:
     """Score les articles sans sentiment via sentiment_utils (VADER ou transformers)."""
     to_score = [i for i, a in enumerate(articles) if a.get("sentiment") is None]
@@ -837,13 +984,25 @@ def _scrape_rss_cached() -> list[dict]:
             _metric_err(source)
             logger.debug(f"RSS {source} : {exc}")
 
-    # ── 2. Reddit JSON API ─────────────────────────────────────
+    # ── 2. Google News RSS ─────────────────────────────────────
+    for source_key, query in GOOGLE_NEWS_QUERIES:
+        articles.extend(_fetch_google_news(source_key, query))
+
+    # ── 3. Reddit JSON API ─────────────────────────────────────
     for source_key, subreddit in REDDIT_SUBS:
         articles.extend(_fetch_reddit(source_key, subreddit))
 
-    # ── 3. Bluesky ─────────────────────────────────────────────
+    # ── 4. Bluesky ─────────────────────────────────────────────
     for source_key, query in BLUESKY_QUERIES:
         articles.extend(_fetch_bluesky(source_key, query))
+
+    # ── 5. Mastodon (API publique) ─────────────────────────────
+    for source_key, instance, tag in MASTODON_TAGS:
+        articles.extend(_fetch_mastodon(source_key, instance, tag))
+
+    # ── 6. X — si X_BEARER_TOKEN défini dans l'environnement ──
+    if os.getenv("X_BEARER_TOKEN"):
+        articles.extend(_fetch_x("x/politique", "politique france"))
 
     # ── 4. Sentiment ───────────────────────────────────────────
     articles = _enrich_with_sentiment(articles)
