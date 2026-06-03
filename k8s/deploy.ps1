@@ -96,31 +96,31 @@ Write-OK "Secret poligraph-secrets"
 Write-Step "4" "Zookeeper"
 kubectl apply -f "$PSScriptRoot\zookeeper.yaml"
 Write-Host "  En attente de Zookeeper..."
-kubectl wait --for=condition=ready pod -l app=zookeeper -n poligraph --timeout=120s
+kubectl rollout status statefulset/zookeeper -n poligraph --timeout=120s
 Write-OK "Zookeeper pret"
 
 Write-Step "5" "Kafka"
 kubectl apply -f "$PSScriptRoot\kafka.yaml"
 Write-Host "  En attente de Kafka (peut prendre ~60s)..."
-kubectl wait --for=condition=ready pod -l app=kafka -n poligraph --timeout=180s
+kubectl rollout status statefulset/kafka -n poligraph --timeout=180s
 Write-OK "Kafka pret"
 
 Write-Step "6" "Creation des topics Kafka"
-kubectl delete job kafka-init -n poligraph --ignore-not-found
+kubectl delete job kafka-init-topics -n poligraph --ignore-not-found
 kubectl apply -f "$PSScriptRoot\kafka-init.yaml"
-kubectl wait --for=condition=complete job/kafka-init -n poligraph --timeout=120s
+kubectl wait --for=condition=complete job/kafka-init-topics -n poligraph --timeout=120s
 Write-OK "Topics raw-articles et features crees"
 
 # ── Applications ──────────────────────────────────────────────────────────────
 Write-Step "7" "Backend FastAPI"
 kubectl apply -f "$PSScriptRoot\backend.yaml"
-kubectl wait --for=condition=ready pod -l app=backend -n poligraph --timeout=180s
+kubectl rollout status deployment/backend -n poligraph --timeout=180s
 Write-OK "Backend pret -> http://localhost:30800/api/health"
 
 Write-Step "8" "Frontend React"
 kubectl apply -f "$PSScriptRoot\frontend.yaml"
 Write-Host "  En attente du frontend (compilation React ~60s)..."
-kubectl wait --for=condition=ready pod -l app=frontend -n poligraph --timeout=300s
+kubectl rollout status deployment/frontend -n poligraph --timeout=300s
 Write-OK "Frontend pret -> http://localhost:30300"
 
 Write-Step "9" "Kafka Producer (scraper RSS)"
