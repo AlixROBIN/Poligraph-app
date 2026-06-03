@@ -120,7 +120,7 @@ Write-OK "Backend pret -> http://localhost:30800/api/health"
 Write-Step "8" "Frontend React"
 kubectl apply -f "$PSScriptRoot\frontend.yaml"
 Write-Host "  En attente du frontend (compilation React ~60s)..."
-kubectl rollout status deployment/frontend -n poligraph --timeout=300s
+kubectl rollout status deployment/frontend -n poligraph --timeout=600s
 Write-OK "Frontend pret -> http://localhost:30300"
 
 Write-Step "9" "Kafka Producer (scraper RSS)"

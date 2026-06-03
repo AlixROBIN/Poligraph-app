@@ -18,7 +18,7 @@ spec:
       initContainers:
         - name: wait-kafka
           image: busybox:1.36
-          command: ["sh", "-c", "until nc -z kafka 29092; do echo 'waiting for kafka...' && sleep 2; done"]
+          command: ["sh", "-c", "until nc -w 2 kafka 29092 </dev/null; do echo 'waiting for kafka...' && sleep 2; done"]
       containers:
         - name: producer
           image: poligraph-backend:latest
