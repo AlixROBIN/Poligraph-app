@@ -37,15 +37,34 @@ Write-OK "Docker Desktop actif"
 try { kubectl cluster-info | Out-Null } catch { Write-Fail "Kubernetes non disponible. Active-le dans Docker Desktop → Settings → Kubernetes → Enable Kubernetes." }
 Write-OK "kubectl connecté au cluster"
 
-# ── Lecture de la clé Groq depuis .env ───────────────────────────────────────
+# ── Lecture de la config depuis .env ─────────────────────────────────────────
 $envFile = Join-Path $ROOT ".env"
-$groqKey = ""
+$groqKey    = ""
+$llmBackend = "ollama"
+$ollamaUrl  = "http://host.docker.internal:11434"
+$ollamaModel = "llama3.1:8b"
+$groqModel  = "llama-3.1-8b-instant"
+
 if (Test-Path $envFile) {
-    $groqKey = (Get-Content $envFile | Where-Object { $_ -match "^GROQ_API_KEY=" }) -replace "^GROQ_API_KEY=", ""
-    $groqKey = $groqKey.Trim()
+    $envLines = Get-Content $envFile
+    foreach ($line in $envLines) {
+        if ($line -match "^GROQ_API_KEY=(.+)")   { $groqKey     = $Matches[1].Trim() }
+        if ($line -match "^LLM_BACKEND=(.+)")    { $llmBackend  = $Matches[1].Trim() }
+        if ($line -match "^OLLAMA_URL=(.+)")     { $ollamaUrl   = $Matches[1].Trim() }
+        if ($line -match "^OLLAMA_MODEL=(.+)")   { $ollamaModel = $Matches[1].Trim() }
+        if ($line -match "^GROQ_MODEL=(.+)")     { $groqModel   = $Matches[1].Trim() }
+    }
 }
-if (-not $groqKey) {
-    Write-Warn "GROQ_API_KEY non trouvée dans .env — PoliBot utilisera le fallback sans LLM"
+
+# En k8s, localhost ne pointe pas vers le host — on force host.docker.internal
+if ($ollamaUrl -match "localhost") {
+    $ollamaUrl = $ollamaUrl -replace "localhost", "host.docker.internal"
+    Write-Warn "OLLAMA_URL: localhost → host.docker.internal (nécessaire en k8s)"
+}
+
+Write-OK "LLM_BACKEND=$llmBackend  OLLAMA=$ollamaUrl"
+if ($llmBackend -eq "groq" -and -not $groqKey) {
+    Write-Warn "GROQ_API_KEY non trouvée — PoliBot dégradé"
 }
 
 # ── Build des images Docker ───────────────────────────────────────────────────
@@ -78,8 +97,10 @@ Write-Step "3" "Secret (GROQ_API_KEY)"
 kubectl create secret generic poligraph-secrets `
     --namespace=poligraph `
     --from-literal=GROQ_API_KEY="$groqKey" `
-    --from-literal=LLM_BACKEND="groq" `
-    --from-literal=GROQ_MODEL="llama-3.1-8b-instant" `
+    --from-literal=LLM_BACKEND="$llmBackend" `
+    --from-literal=OLLAMA_URL="$ollamaUrl" `
+    --from-literal=OLLAMA_MODEL="$ollamaModel" `
+    --from-literal=GROQ_MODEL="$groqModel" `
     --dry-run=client -o yaml | kubectl apply -f -
 Write-OK "Secret poligraph-secrets"
 

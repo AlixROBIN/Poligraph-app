@@ -43,6 +43,16 @@ spec:
                 secretKeyRef:
                   name: poligraph-secrets
                   key: LLM_BACKEND
+            - name: OLLAMA_URL
+              valueFrom:
+                secretKeyRef:
+                  name: poligraph-secrets
+                  key: OLLAMA_URL
+            - name: OLLAMA_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: poligraph-secrets
+                  key: OLLAMA_MODEL
             - name: GROQ_MODEL
               valueFrom:
                 secretKeyRef:
