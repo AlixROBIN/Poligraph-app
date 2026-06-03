@@ -41,26 +41,12 @@ spec:
             limits:
               memory: "1Gi"
               cpu: "1"
-          volumeMounts:
-            - name: src-code
-              mountPath: /app/src
-            - name: public-code
-              mountPath: /app/public
           startupProbe:
             tcpSocket:
               port: 3000
             initialDelaySeconds: 30
             periodSeconds: 10
             failureThreshold: 10
-      volumes:
-        - name: src-code
-          hostPath:
-            path: /run/desktop/mnt/host/c/Users/alixc/Documents/inseeProject/poligraph-app/src
-            type: Directory
-        - name: public-code
-          hostPath:
-            path: /run/desktop/mnt/host/c/Users/alixc/Documents/inseeProject/poligraph-app/public
-            type: Directory
 ---
 apiVersion: v1
 kind: Service

@@ -54,30 +54,4 @@ spec:
             limits:
               memory: "3500Mi"
               cpu: "2"
-          volumeMounts:
-            - name: spark-jobs
-              mountPath: /opt/spark-jobs
-            - name: ivy-cache
-              mountPath: /root/.ivy2
-            - name: hf-cache
-              mountPath: /opt/hf-cache
-            - name: spark-checkpoint
-              mountPath: /opt/spark-checkpoint
-      volumes:
-        - name: spark-jobs
-          hostPath:
-            path: /run/desktop/mnt/host/c/Users/alixc/Documents/inseeProject/spark
-            type: Directory
-        - name: ivy-cache
-          hostPath:
-            path: /run/desktop/mnt/host/c/Users/alixc/Documents/inseeProject/output/spark-ivy-cache
-            type: DirectoryOrCreate
-        - name: hf-cache
-          hostPath:
-            path: /run/desktop/mnt/host/c/Users/alixc/Documents/inseeProject/output/hf-cache
-            type: DirectoryOrCreate
-        - name: spark-checkpoint
-          hostPath:
-            path: /run/desktop/mnt/host/c/Users/alixc/Documents/inseeProject/output/spark-checkpoint
-            type: DirectoryOrCreate
       restartPolicy: Always

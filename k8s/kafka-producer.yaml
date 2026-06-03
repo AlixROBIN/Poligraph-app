@@ -38,12 +38,4 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
-          volumeMounts:
-            - name: streaming-code
-              mountPath: /app/streaming
-      volumes:
-        - name: streaming-code
-          hostPath:
-            path: /run/desktop/mnt/host/c/Users/alixc/Documents/inseeProject/streaming
-            type: Directory
       restartPolicy: Always
