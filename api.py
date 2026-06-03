@@ -608,6 +608,23 @@ def proxy_partis_detail(slug: str):
     return _pg(f"partis/{slug}")
 
 
+@app.get("/api/proxy/partis/{slug}/membres")
+def proxy_partis_membres(slug: str, limit: int = 24, page: int = 1):
+    try:
+        return _pg(f"partis/{slug}/membres", {"limit": limit, "page": page})
+    except Exception:
+        return {"data": [], "pagination": {"total": 0, "page": 1, "totalPages": 1}}
+
+
+@app.get("/api/proxy/scrutins/{scrutin_ref}/groupes")
+def proxy_scrutin_groupes(scrutin_ref: str):
+    """Détail du vote par groupe parlementaire pour un scrutin donné."""
+    try:
+        return _pg(f"scrutins/{scrutin_ref}/groupes")
+    except Exception:
+        return {"groupes": []}
+
+
 # ============================================================
 # Journal — articles RSS en temps réel
 # ============================================================

@@ -53,14 +53,15 @@ const Pager = ({ pagination, onPage }) => {
 const PTABS = ["Mandats", "Scandales", "Votes", "Relations"];
 
 const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
-  const [profile,   setProfile]   = useState(null);
-  const [tab,       setTab]       = useState("Mandats");
-  const [affaires,  setAffaires]  = useState(null);
-  const [votes,     setVotes]     = useState(null);
-  const [votePage,  setVotePage]  = useState(1);
-  const [relations, setRelations] = useState(null);
-  const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState(null);
+  const [profile,      setProfile]      = useState(null);
+  const [tab,          setTab]          = useState("Mandats");
+  const [affaires,     setAffaires]     = useState(null);
+  const [votes,        setVotes]        = useState(null);
+  const [votePage,     setVotePage]     = useState(1);
+  const [relations,    setRelations]    = useState(null);
+  const [partyMembers, setPartyMembers] = useState(null);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState(null);
 
   useEffect(() => {
     setLoading(true); setError(null);
@@ -73,9 +74,15 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
   useEffect(() => {
     if (tab === "Scandales" && !affaires)
       apiFetch(`politiques/${slug}/affaires`).then(setAffaires).catch(() => setAffaires({ affairs: [] }));
-    if (tab === "Relations" && !relations)
+    if (tab === "Relations" && !relations) {
       apiFetch(`politiques/${slug}/relations`).then(setRelations).catch(() => setRelations({ clusters: [] }));
-  }, [tab, slug, affaires, relations]);
+    }
+    if (tab === "Relations" && !partyMembers && profile?.currentParty?.slug) {
+      apiFetch(`partis/${profile.currentParty.slug}/membres`, { limit: 24, page: 1 })
+        .then((res) => setPartyMembers(res?.data || []))
+        .catch(() => setPartyMembers([]));
+    }
+  }, [tab, slug, affaires, relations, partyMembers, profile]);
 
   useEffect(() => {
     if (tab === "Votes")
@@ -236,33 +243,68 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
 
         {/* Relations */}
         {tab === "Relations" && (
-          !relations ? <p style={{ color: "#888" }}>Chargement...</p>
-          : relations.clusters?.length
-            ? relations.clusters.map((cluster, ci) => (
-                <div key={ci} style={{ marginBottom: 16 }}>
-                  <h4 style={{ margin: "0 0 8px", color: "#666", fontSize: 13 }}>
-                    {cluster.label} — {cluster.type?.replace(/_/g," ")}
-                  </h4>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {cluster.nodes?.slice(0,12).map((n, ni) => (
-                      <div key={ni}
-                        onClick={() => n.slug && onSelectSlug(n.slug)}
-                        style={{ display:"flex", alignItems:"center", gap:6,
-                          padding:"4px 10px", background:"#f8f9ff", borderRadius:20,
-                          fontSize:12, border:"1px solid #e0e7ff",
-                          cursor: n.slug ? "pointer" : "default",
-                          transition: "border 0.15s, background 0.15s" }}
-                        onMouseEnter={(e) => { if (n.slug) { e.currentTarget.style.border="1px solid #1a3a6e"; e.currentTarget.style.background="#eef2ff"; }}}
-                        onMouseLeave={(e) => { e.currentTarget.style.border="1px solid #e0e7ff"; e.currentTarget.style.background="#f8f9ff"; }}>
-                        {n.photoUrl && <img src={n.photoUrl} alt="" style={{ width:20, height:20, borderRadius:"50%", objectFit:"cover"}} />}
-                        {n.fullName}
-                        {n.slug && <span style={{ fontSize:10, color:"#1a3a6e", opacity:0.6 }}>→</span>}
-                      </div>
-                    ))}
-                  </div>
+          <div>
+            {/* Collègues de parti */}
+            {partyMembers && partyMembers.filter(m => m.slug !== slug).length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <h4 style={{ margin: "0 0 4px", color: "#1a3a6e", fontSize: 13, fontWeight: 700 }}>
+                  Collègues du même parti — {profile.currentParty?.shortName || profile.currentParty?.name}
+                </h4>
+                <p style={{ margin: "0 0 10px", fontSize: 11, color: "#aaa" }}>
+                  Membres actifs du même groupe parlementaire
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {partyMembers.filter(m => m.slug !== slug).slice(0, 20).map((m, mi) => (
+                    <div key={mi}
+                      onClick={() => m.slug && onSelectSlug(m.slug)}
+                      style={{ display:"flex", alignItems:"center", gap:6,
+                        padding:"4px 10px", background:"#eef6ff", borderRadius:20,
+                        fontSize:12, border:`1px solid ${profile.currentParty?.color || "#1a3a6e"}44`,
+                        cursor: m.slug ? "pointer" : "default",
+                        transition: "border 0.15s, background 0.15s" }}
+                      onMouseEnter={(e) => { if (m.slug) { e.currentTarget.style.background="#ddeeff"; }}}
+                      onMouseLeave={(e) => { e.currentTarget.style.background="#eef6ff"; }}>
+                      {m.photoUrl && <img src={m.photoUrl} alt="" style={{ width:20, height:20, borderRadius:"50%", objectFit:"cover"}} />}
+                      <span>{m.fullName}</span>
+                      {m.slug && <span style={{ fontSize:10, color:"#1a3a6e", opacity:0.6 }}>→</span>}
+                    </div>
+                  ))}
                 </div>
-              ))
-            : <p style={{ color: "#888" }}>Aucune relation recensée.</p>
+              </div>
+            )}
+
+            {/* Relations issues de l'API */}
+            {!relations ? <p style={{ color: "#888" }}>Chargement des relations...</p>
+            : relations.clusters?.length
+              ? relations.clusters.map((cluster, ci) => (
+                  <div key={ci} style={{ marginBottom: 16 }}>
+                    <h4 style={{ margin: "0 0 8px", color: "#666", fontSize: 13 }}>
+                      {cluster.label} — {cluster.type?.replace(/_/g," ")}
+                    </h4>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {cluster.nodes?.slice(0,12).map((n, ni) => (
+                        <div key={ni}
+                          onClick={() => n.slug && onSelectSlug(n.slug)}
+                          style={{ display:"flex", alignItems:"center", gap:6,
+                            padding:"4px 10px", background:"#f8f9ff", borderRadius:20,
+                            fontSize:12, border:"1px solid #e0e7ff",
+                            cursor: n.slug ? "pointer" : "default",
+                            transition: "border 0.15s, background 0.15s" }}
+                          onMouseEnter={(e) => { if (n.slug) { e.currentTarget.style.border="1px solid #1a3a6e"; e.currentTarget.style.background="#eef2ff"; }}}
+                          onMouseLeave={(e) => { e.currentTarget.style.border="1px solid #e0e7ff"; e.currentTarget.style.background="#f8f9ff"; }}>
+                          {n.photoUrl && <img src={n.photoUrl} alt="" style={{ width:20, height:20, borderRadius:"50%", objectFit:"cover"}} />}
+                          {n.fullName}
+                          {n.slug && <span style={{ fontSize:10, color:"#1a3a6e", opacity:0.6 }}>→</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              : (!partyMembers || partyMembers.length === 0) && (
+                  <p style={{ color: "#888" }}>Aucune relation recensée.</p>
+                )
+            }
+          </div>
         )}
       </div>
     </div>

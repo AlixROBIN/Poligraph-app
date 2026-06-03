@@ -2,15 +2,41 @@ import React from "react";
 import "../styles/Navbar.css";
 
 const PAGES = [
-  { id: "dashboard",   label: "Dashboard" },
-  { id: "annuaire",    label: "Annuaire" },
-  { id: "exploration", label: "Exploration" },
-  { id: "journal",     label: "Journal" },
+  { id: "accueil",    label: "Accueil" },
+  { id: "annuaire",   label: "Annuaire" },
+  { id: "exploration",label: "Exploration" },
+  { id: "dashboard",  label: "Statistiques" },
+  { id: "journal",    label: "Journal" },
 ];
 
-const Navbar = ({ currentPage, onPageChange }) => (
+const Navbar = ({ currentPage, onPageChange, canGoBack, onBack }) => (
   <header className="navbar">
-    <h1>Poli<span>Graph</span></h1>
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      {canGoBack && (
+        <button
+          onClick={onBack}
+          style={{
+            background: "rgba(255,255,255,0.15)",
+            border: "1px solid rgba(255,255,255,0.3)",
+            color: "#fff",
+            borderRadius: 6,
+            padding: "4px 10px",
+            cursor: "pointer",
+            fontSize: 14,
+            fontWeight: 600,
+            transition: "background 0.15s",
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.25)"}
+          onMouseLeave={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.15)"}
+          title="Page précédente"
+        >
+          ← Retour
+        </button>
+      )}
+      <h1 style={{ cursor: "pointer" }} onClick={() => onPageChange("accueil")}>
+        Poli<span>Graph</span>
+      </h1>
+    </div>
     <div className="nav-links">
       {PAGES.map((p) => (
         <button key={p.id}

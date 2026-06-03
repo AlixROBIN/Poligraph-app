@@ -5,33 +5,65 @@ import { fetchJSON } from "../data/api";
 
 const SOURCES_CONFIG = {
   // ── Presse ──────────────────────────────────────────────────────────────
-  lemonde:                { label: "Le Monde",             type: "presse", color: "#0066CC", bg: "#e8f0fb" },
-  lefigaro:               { label: "Le Figaro",            type: "presse", color: "#C00000", bg: "#fdecea" },
-  liberation:             { label: "Libération",           type: "presse", color: "#E4002B", bg: "#fff0f0" },
-  franceinfo:             { label: "France Info",          type: "presse", color: "#003189", bg: "#e8eaf6" },
-  lepoint:                { label: "Le Point",             type: "presse", color: "#2c2c2c", bg: "#f5f5f5" },
-  "googlenews/politique": { label: "Google News",          type: "presse", color: "#4285F4", bg: "#e8f0fe" },
-  "googlenews/parlement": { label: "Google News · Parl.",  type: "presse", color: "#4285F4", bg: "#e8f0fe" },
+  lemonde:                { label: "Le Monde",             type: "presse", color: "#0066CC", bg: "#e8f0fb",
+    owner: "Groupe Le Monde (Xavier Niel, Matthieu Pigasse…)", lean: "Centre-gauche", leanColor: "#2980b9" },
+  lefigaro:               { label: "Le Figaro",            type: "presse", color: "#C00000", bg: "#fdecea",
+    owner: "Groupe Dassault (famille Dassault)", lean: "Droite", leanColor: "#c0392b" },
+  liberation:             { label: "Libération",           type: "presse", color: "#E4002B", bg: "#fff0f0",
+    owner: "Altice France (Patrick Drahi)", lean: "Centre-gauche", leanColor: "#2980b9" },
+  franceinfo:             { label: "France Info",          type: "presse", color: "#003189", bg: "#e8eaf6",
+    owner: "Service public (État français)", lean: "Neutre institutionnel", leanColor: "#7f8c8d" },
+  lepoint:                { label: "Le Point",             type: "presse", color: "#2c2c2c", bg: "#f5f5f5",
+    owner: "Artémis (famille Pinault/Kering)", lean: "Centre-droit", leanColor: "#e67e22" },
+  "googlenews/politique": { label: "Google News",          type: "presse", color: "#4285F4", bg: "#e8f0fe",
+    owner: "Google (Alphabet Inc.)", lean: "Agrégateur neutre", leanColor: "#7f8c8d" },
+  "googlenews/parlement": { label: "Google News · Parl.",  type: "presse", color: "#4285F4", bg: "#e8f0fe",
+    owner: "Google (Alphabet Inc.)", lean: "Agrégateur neutre", leanColor: "#7f8c8d" },
   // ── Réseaux sociaux ─────────────────────────────────────────────────────
-  "reddit/r/france":      { label: "Reddit · r/france",   type: "social", color: "#FF4500", bg: "#fff3ee" },
-  "reddit/r/politique":   { label: "Reddit · r/politique", type: "social", color: "#FF4500", bg: "#fff3ee" },
-  "bluesky/politique":    { label: "Bluesky · Politique", type: "social", color: "#0085FF", bg: "#e8f4ff" },
-  "bluesky/france":       { label: "Bluesky · France",    type: "social", color: "#0085FF", bg: "#e8f4ff" },
-  "mastodon/politique":   { label: "Mastodon · Politique", type: "social", color: "#6364FF", bg: "#f0f0ff" },
-  "mastodon/parlement":   { label: "Mastodon · Parlement", type: "social", color: "#6364FF", bg: "#f0f0ff" },
-  "mastodon/france":      { label: "Mastodon · France",   type: "social", color: "#6364FF", bg: "#f0f0ff" },
-  "x/politique":          { label: "X · Politique",       type: "social", color: "#14171A", bg: "#f7f7f7" },
-  "threads/politique":    { label: "Threads · Politique", type: "social", color: "#000000", bg: "#f5f5f5" },
-  "facebook/politique":   { label: "Facebook · Politique", type: "social", color: "#1877F2", bg: "#e7f0fd" },
+  "reddit/r/france":      { label: "Reddit · r/france",   type: "social", color: "#FF4500", bg: "#fff3ee",
+    owner: "Communauté Reddit", lean: "Opinions citoyennes diverses", leanColor: "#7f8c8d" },
+  "reddit/r/politique":   { label: "Reddit · r/politique", type: "social", color: "#FF4500", bg: "#fff3ee",
+    owner: "Communauté Reddit", lean: "Opinions citoyennes diverses", leanColor: "#7f8c8d" },
+  "bluesky/politique":    { label: "Bluesky · Politique", type: "social", color: "#0085FF", bg: "#e8f4ff",
+    owner: "Bluesky Social PBC", lean: "Comptes politiques officiels", leanColor: "#7f8c8d" },
+  "bluesky/france":       { label: "Bluesky · France",    type: "social", color: "#0085FF", bg: "#e8f4ff",
+    owner: "Bluesky Social PBC", lean: "Opinions citoyennes diverses", leanColor: "#7f8c8d" },
+  "mastodon/politique":   { label: "Mastodon · Politique", type: "social", color: "#6364FF", bg: "#f0f0ff",
+    owner: "Réseau décentralisé Fediverse", lean: "Opinions citoyennes diverses", leanColor: "#7f8c8d" },
+  "mastodon/parlement":   { label: "Mastodon · Parlement", type: "social", color: "#6364FF", bg: "#f0f0ff",
+    owner: "Réseau décentralisé Fediverse", lean: "Comptes officiels parlement", leanColor: "#7f8c8d" },
+  "mastodon/france":      { label: "Mastodon · France",   type: "social", color: "#6364FF", bg: "#f0f0ff",
+    owner: "Réseau décentralisé Fediverse", lean: "Opinions citoyennes diverses", leanColor: "#7f8c8d" },
+  "x/politique":          { label: "X · Politique",       type: "social", color: "#14171A", bg: "#f7f7f7",
+    owner: "X Corp. (Elon Musk)", lean: "Comptes politiques officiels", leanColor: "#7f8c8d" },
+  "threads/politique":    { label: "Threads · Politique", type: "social", color: "#000000", bg: "#f5f5f5",
+    owner: "Meta Platforms (Mark Zuckerberg)", lean: "Comptes politiques officiels", leanColor: "#7f8c8d" },
+  "facebook/politique":   { label: "Facebook · Politique", type: "social", color: "#1877F2", bg: "#e7f0fd",
+    owner: "Meta Platforms (Mark Zuckerberg)", lean: "Pages politiques officielles", leanColor: "#7f8c8d" },
 };
 
 const TYPE_ICON = { presse: "📰", social: "💬" };
 
 const SENTIMENT_CFG = {
-  POSITIVE: { color: "#2ecc71", bg: "#eafaf1", label: "Positif",  bar: "#2ecc71" },
-  NEGATIVE: { color: "#e74c3c", bg: "#fdedec", label: "Négatif",  bar: "#e74c3c" },
-  NEUTRAL:  { color: "#95a5a6", bg: "#f2f3f4", label: "Neutre",   bar: "#bbb"    },
-  UNKNOWN:  { color: "#bbb",    bg: "#f5f5f5", label: "–",        bar: "#eee"    },
+  POSITIVE: {
+    color: "#27ae60", bg: "#eafaf1", bar: "#2ecc71",
+    label: "Ton favorable",
+    sublabel: "L'auteur semble porter un regard positif sur le sujet — possible biais favorable",
+    icon: "↑",
+  },
+  NEGATIVE: {
+    color: "#c0392b", bg: "#fdedec", bar: "#e74c3c",
+    label: "Ton critique",
+    sublabel: "L'auteur exprime une opinion négative — possible biais défavorable au sujet",
+    icon: "↓",
+  },
+  NEUTRAL: {
+    color: "#7f8c8d", bg: "#f2f3f4", bar: "#bbb",
+    label: "Ton équilibré",
+    sublabel: "Aucun biais apparent détecté — l'article semble traiter le sujet de façon neutre",
+    icon: "=",
+  },
+  UNKNOWN: { color: "#bbb", bg: "#f5f5f5", label: "–", sublabel: "", icon: "?", bar: "#eee" },
 };
 
 const PRESS_SOURCES  = [
@@ -67,15 +99,26 @@ function getSourceCfg(source) {
 
 function SourceBadge({ source }) {
   const cfg = getSourceCfg(source);
+  const tooltip = cfg.owner
+    ? `Propriétaire : ${cfg.owner}\nOrientation : ${cfg.lean}`
+    : cfg.label;
   return (
-    <span style={{
+    <span title={tooltip} style={{
       display: "inline-flex", alignItems: "center", gap: 4,
       padding: "3px 9px", borderRadius: 5, fontSize: 11, fontWeight: 700,
       background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}33`,
-      textTransform: "uppercase", letterSpacing: "0.4px",
+      textTransform: "uppercase", letterSpacing: "0.4px", cursor: "help",
     }}>
       <span>{TYPE_ICON[cfg.type]}</span>
       {cfg.label}
+      {cfg.lean && (
+        <span style={{
+          fontSize: 9, background: cfg.leanColor + "22", color: cfg.leanColor,
+          borderRadius: 3, padding: "1px 4px", fontWeight: 700, marginLeft: 2,
+        }}>
+          {cfg.lean.split(" ")[0]}
+        </span>
+      )}
     </span>
   );
 }
@@ -84,12 +127,12 @@ function SentimentBadge({ label, score }) {
   if (!label) return null;
   const cfg = SENTIMENT_CFG[label] || SENTIMENT_CFG.NEUTRAL;
   return (
-    <span style={{
+    <span title={cfg.sublabel} style={{
       display: "inline-flex", alignItems: "center", gap: 4,
       padding: "3px 8px", borderRadius: 12, fontSize: 11, fontWeight: 600,
-      background: cfg.bg, color: cfg.color,
+      background: cfg.bg, color: cfg.color, cursor: "help",
     }}>
-      <span style={{ fontSize: 8 }}>●</span>
+      <span style={{ fontWeight: 700, fontSize: 10 }}>{cfg.icon}</span>
       {cfg.label}
       {score != null && (
         <span style={{ opacity: 0.7, fontWeight: 400 }}>
