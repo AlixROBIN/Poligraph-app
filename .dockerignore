@@ -17,7 +17,17 @@ hadoop/
 .venv/
 .vscode/
 .idea/
-output/
+# Artefacts ML lourds — exclus du conteneur
+output/vectors/
+output/models/
+output/hf-cache/
+output/spark-ivy-cache/
+output/spark-checkpoint/
+output/similarity/
+output/stream_snapshot.parquet
+output/*.png
+output/*.txt
+# output/analytics/ et output/dashboard/ inclus (données prod nécessaires)
 data/
 logs/
 *.egg-info/
