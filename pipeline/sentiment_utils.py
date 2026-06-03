@@ -49,13 +49,57 @@ def _normalize_label(label: str) -> str:
     return "NEUTRAL"
 
 
+# Mots négatifs français forts — VADER ne les connaît pas, ce qui provoque
+# des faux positifs sur des articles de violence/crime/politique.
+_FR_NEG = frozenset({
+    "blessé","blessée","blessés","blessées","blessure","blessures",
+    "mort","morte","morts","mortes","décès","décédé","décédée",
+    "tué","tuée","tués","tuées","assassinat","meurtre","meurtres",
+    "victime","victimes","violence","violences","agression","agressions",
+    "grave","graves","dramatique","tragique","catastrophe","drame","tragédie",
+    "crise","scandale","polémique","controverse","affaire",
+    "condamné","condamnée","condamnation","inculpé","mis en examen",
+    "arrestation","garde","prison","incarcéré","détenu","peine","sanction","jugement","procès","tribunal",
+    "fraude","corruption","détournement","malversation","forfait",
+    "attaque","attentat","émeute","incendie","accident",
+    "licenciement","chômage","faillite","défaite","échec",
+    "saisie","enquête","plainte","signalement",
+    "LBD","IGPN","BRAV","violences policières",
+    "injustice","racisme","harcèlement","viol","abus",
+})
+
+_FR_POS_EXTRA = frozenset({
+    "victoire","victoires","accord","paix","progrès","innovation",
+    "récompense","solidarité","réconciliation","adoption",
+})
+
+
+def _french_correct(text: str, score: float) -> float:
+    """
+    Corrige les faux positifs VADER sur texte français.
+    Stratégie : pour chaque mot négatif fort trouvé, on applique une pénalité.
+    Sans correction : "blessé à l'œil … sacre PSG … champions" → +0.53 (faux positif).
+    Avec correction : détecte "blessé","saisie","IGPN" → pénalité -0.7 → -0.17.
+    """
+    import re
+    words_lower = {w.lower() for w in re.findall(r'\b\w+\b', text)}
+    neg_hits = len(words_lower & _FR_NEG)
+    if neg_hits == 0:
+        return score
+    penalty = min(0.4 + 0.15 * (neg_hits - 1), 0.8)
+    return max(-1.0, min(1.0, score - penalty))
+
+
 def _vader_scores(texts: list[str]) -> list[float]:
-    """Fallback VADER — fonctionne sans torch, supporte partiellement le français."""
+    """VADER avec correction des faux positifs sur texte français."""
     try:
         from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
         if not hasattr(_vader_scores, "_analyzer"):
             _vader_scores._analyzer = SentimentIntensityAnalyzer()
-        return [float(_vader_scores._analyzer.polarity_scores(t)["compound"]) for t in texts]
+        return [
+            _french_correct(t, float(_vader_scores._analyzer.polarity_scores(t)["compound"]))
+            for t in texts
+        ]
     except Exception as exc:
         log.warning(f"VADER indisponible ({exc}) → sentiment=0.0")
         return [0.0] * len(texts)

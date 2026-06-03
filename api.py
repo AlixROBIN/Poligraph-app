@@ -1134,7 +1134,14 @@ def predict_vote_endpoint(req: PredictVoteRequest):
 
 # ============================================================
 # Agent Chatbot — PoliBot (ReAct : Think → Act → Observe)
-# Moteur : Groq (gratuit, groq.com) — format OpenAI-compatible
+# Backends : Groq (cloud) ou Ollama (local) selon LLM_BACKEND
+#
+# Variables d'environnement :
+#   LLM_BACKEND   = "groq" (défaut) | "ollama"
+#   GROQ_API_KEY  = clé Groq        (si backend=groq)
+#   GROQ_MODEL    = llama-3.1-8b-instant (défaut — 5× plus de quota que 70b)
+#   OLLAMA_URL    = http://localhost:11434 (défaut)
+#   OLLAMA_MODEL  = llama3.1:8b     (défaut — supporte le tool calling)
 # ============================================================
 
 _groq_client = None
@@ -1567,7 +1574,69 @@ Pour toute question sur un personnage politique ou une situation politique :
 - Cite les sources (nom du journal, date si disponible)
 - Mentionne le sentiment médiatique quand il est disponible (positif/négatif/neutre)"""
 
-_GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+_GROQ_MODEL   = os.getenv("GROQ_MODEL",   "llama-3.1-8b-instant")   # 500k TPD vs 100k pour 70b
+_OLLAMA_URL   = os.getenv("OLLAMA_URL",   "http://localhost:11434")
+_OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+
+
+def _llm_complete(messages: list, tools: list) -> dict:
+    """
+    Appel LLM unifié — retourne un dict normalisé :
+      {"finish_reason": str, "content": str, "tool_calls": list}
+
+    Backend sélectionné via LLM_BACKEND :
+      - "groq"   (défaut) : cloud Groq, nécessite GROQ_API_KEY
+      - "ollama" : modèle local via Ollama (llama3.1:8b recommandé)
+        → installer : https://ollama.com  puis : ollama pull llama3.1:8b
+    """
+    backend = os.getenv("LLM_BACKEND", "groq").lower()
+
+    if backend == "ollama":
+        url  = _OLLAMA_URL.rstrip("/") + "/v1/chat/completions"
+        resp = http_requests.post(url, json={
+            "model":       _OLLAMA_MODEL,
+            "messages":    messages,
+            "tools":       tools,
+            "tool_choice": "auto",
+            "max_tokens":  2048,
+            "temperature": 0.3,
+            "stream":      False,
+        }, timeout=120)
+        if resp.status_code != 200:
+            raise HTTPException(502, f"Ollama {resp.status_code}: {resp.text[:200]}")
+        data   = resp.json()
+        choice = data["choices"][0]
+        msg    = choice["message"]
+        return {
+            "finish_reason": choice.get("finish_reason", "stop"),
+            "content":       msg.get("content") or "",
+            "tool_calls":    msg.get("tool_calls") or [],
+        }
+
+    # Groq (défaut)
+    client   = _get_groq()
+    response = client.chat.completions.create(
+        model=_GROQ_MODEL,
+        messages=messages,
+        tools=tools,
+        tool_choice="auto",
+        max_tokens=2048,
+        temperature=0.3,
+    )
+    choice = response.choices[0]
+    msg    = choice.message
+    return {
+        "finish_reason": choice.finish_reason,
+        "content":       msg.content or "",
+        "tool_calls": [
+            {
+                "id":       tc.id,
+                "type":     "function",
+                "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+            }
+            for tc in (msg.tool_calls or [])
+        ],
+    }
 
 
 class ChatRequest(BaseModel):
@@ -1577,68 +1646,35 @@ class ChatRequest(BaseModel):
 
 @app.post("/api/chat")
 def chat_endpoint(req: ChatRequest):
-    """
-    Agent ReAct PoliBot : Groq (Llama) + outils PoliGraph.
-    Boucle Think → Act (outil DB/presse) → Observe (résultat) → réponse finale.
-    """
-    client = _get_groq()
-
-    # Format Groq/OpenAI : système en premier, puis historique, puis message user
+    """Agent ReAct PoliBot — Groq ou Ollama selon LLM_BACKEND."""
     messages = [{"role": "system", "content": _AGENT_SYSTEM}]
     messages += [m for m in req.history if m.get("role") in ("user", "assistant", "tool")]
     messages.append({"role": "user", "content": req.message})
-
     steps = []
 
-    for _ in range(6):  # max 6 itérations ReAct (Render timeout 30s)
-        response = client.chat.completions.create(
-            model=_GROQ_MODEL,
-            messages=messages,
-            tools=AGENT_TOOLS,
-            tool_choice="auto",
-            max_tokens=2048,
-            temperature=0.3,
-        )
+    for _ in range(6):
+        result = _llm_complete(messages, AGENT_TOOLS)
 
-        choice  = response.choices[0]
-        message = choice.message
-
-        if choice.finish_reason == "tool_calls" and message.tool_calls:
-            # Ajouter le message assistant (avec tool_calls) à l'historique
+        if result["finish_reason"] == "tool_calls" and result["tool_calls"]:
             messages.append({
                 "role":       "assistant",
-                "content":    message.content or "",
-                "tool_calls": [
-                    {
-                        "id":       tc.id,
-                        "type":     "function",
-                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                    }
-                    for tc in message.tool_calls
-                ],
+                "content":    result["content"],
+                "tool_calls": result["tool_calls"],
             })
-
-            # Exécuter chaque outil et ajouter le résultat
-            for tc in message.tool_calls:
+            for tc in result["tool_calls"]:
                 try:
-                    args = json.loads(tc.function.arguments)
-                except json.JSONDecodeError:
+                    args = json.loads(tc["function"]["arguments"])
+                except (json.JSONDecodeError, KeyError):
                     args = {}
-                result = _execute_agent_tool(tc.function.name, args)
-                steps.append({
-                    "outil":      tc.function.name,
-                    "paramètres": args,
-                    "résultat":   result,
-                })
+                tool_result = _execute_agent_tool(tc["function"]["name"], args)
+                steps.append({"outil": tc["function"]["name"], "paramètres": args, "résultat": tool_result})
                 messages.append({
                     "role":         "tool",
-                    "tool_call_id": tc.id,
-                    "content":      json.dumps(result, ensure_ascii=False, default=str),
+                    "tool_call_id": tc.get("id", ""),
+                    "content":      json.dumps(tool_result, ensure_ascii=False, default=str),
                 })
-
         else:
-            # Réponse finale — stop_reason = "stop" ou "length"
-            return {"response": message.content or "", "steps": steps}
+            return {"response": result["content"], "steps": steps}
 
     return {"response": "Limite d'itérations atteinte.", "steps": steps}
 
@@ -1650,8 +1686,7 @@ async def chat_stream_endpoint(req: ChatRequest):
     Contourne le timeout HTTP 30s de Render : la connexion streaming reste ouverte.
     Chaque étape (outil appelé) est envoyée dès qu'elle est disponible.
     """
-    client = _get_groq()
-    loop   = asyncio.get_event_loop()
+    loop = asyncio.get_event_loop()
 
     async def generate():
         messages = [{"role": "system", "content": _AGENT_SYSTEM}]
@@ -1661,48 +1696,29 @@ async def chat_stream_endpoint(req: ChatRequest):
 
         try:
             for _ in range(6):
-                # Appel Groq synchrone exécuté dans un thread pour ne pas bloquer l'event loop
                 captured = {"msgs": list(messages)}
-                response = await loop.run_in_executor(
+                result = await loop.run_in_executor(
                     None,
-                    lambda: client.chat.completions.create(
-                        model=_GROQ_MODEL,
-                        messages=captured["msgs"],
-                        tools=AGENT_TOOLS,
-                        tool_choice="auto",
-                        max_tokens=2048,
-                        temperature=0.3,
-                    ),
+                    lambda: _llm_complete(captured["msgs"], AGENT_TOOLS),
                 )
 
-                choice  = response.choices[0]
-                message = choice.message
-
-                if choice.finish_reason == "tool_calls" and message.tool_calls:
+                if result["finish_reason"] == "tool_calls" and result["tool_calls"]:
                     messages.append({
                         "role":       "assistant",
-                        "content":    message.content or "",
-                        "tool_calls": [
-                            {
-                                "id":       tc.id,
-                                "type":     "function",
-                                "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                            }
-                            for tc in message.tool_calls
-                        ],
+                        "content":    result["content"],
+                        "tool_calls": result["tool_calls"],
                     })
 
-                    for tc in message.tool_calls:
+                    for tc in result["tool_calls"]:
                         try:
-                            args = json.loads(tc.function.arguments)
-                        except json.JSONDecodeError:
+                            args = json.loads(tc["function"]["arguments"])
+                        except (json.JSONDecodeError, KeyError):
                             args = {}
 
-                        result = _execute_agent_tool(tc.function.name, args)
-                        step   = {"outil": tc.function.name, "paramètres": args, "résultat": result}
+                        tool_result = _execute_agent_tool(tc["function"]["name"], args)
+                        step = {"outil": tc["function"]["name"], "paramètres": args, "résultat": tool_result}
                         steps.append(step)
 
-                        # Envoyer l'étape immédiatement au client
                         yield (
                             "data: "
                             + json.dumps({"type": "step", "step": step}, ensure_ascii=False, default=str)
@@ -1711,17 +1727,16 @@ async def chat_stream_endpoint(req: ChatRequest):
 
                         messages.append({
                             "role":         "tool",
-                            "tool_call_id": tc.id,
-                            "content":      json.dumps(result, ensure_ascii=False, default=str),
+                            "tool_call_id": tc.get("id", ""),
+                            "content":      json.dumps(tool_result, ensure_ascii=False, default=str),
                         })
 
                 else:
                     yield (
                         "data: "
                         + json.dumps(
-                            {"type": "done", "response": message.content or "", "steps": steps},
-                            ensure_ascii=False,
-                            default=str,
+                            {"type": "done", "response": result["content"], "steps": steps},
+                            ensure_ascii=False, default=str,
                         )
                         + "\n\n"
                     )
