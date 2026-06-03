@@ -1956,7 +1956,7 @@ def _llm_complete(messages: list, tools: list) -> dict:
       - "ollama" : modèle local via Ollama (llama3.1:8b recommandé)
         → installer : https://ollama.com  puis : ollama pull llama3.1:8b
     """
-    backend = os.getenv("LLM_BACKEND", "groq").lower()
+    backend = os.getenv("LLM_BACKEND", "ollama").lower()
 
     if backend == "ollama":
         url  = _OLLAMA_URL.rstrip("/") + "/v1/chat/completions"

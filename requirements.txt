@@ -33,6 +33,5 @@ vaderSentiment>=3.3.2
 # Requiert torch : pip install torch --index-url https://download.pytorch.org/whl/cpu
 transformers>=4.40.0
 
-# ── Agent LLM (chatbot PoliBot) — Groq, gratuit sur groq.com ──────────────
-groq>=0.11.0
+# ── Agent LLM (chatbot PoliBot) — Ollama local ────────────────────────────
 python-dotenv>=1.0.0

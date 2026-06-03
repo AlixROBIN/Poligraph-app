@@ -39,19 +39,13 @@ Write-OK "kubectl connecte au cluster"
 
 # ── Lecture du .env ───────────────────────────────────────────────────────────
 $envFile     = Join-Path $ROOT ".env"
-$groqKey     = ""
-$llmBackend  = "ollama"
 $ollamaUrl   = "http://host.docker.internal:11434"
 $ollamaModel = "llama3.1:8b"
-$groqModel   = "llama-3.1-8b-instant"
 
 if (Test-Path $envFile) {
     foreach ($line in (Get-Content $envFile)) {
-        if ($line -match "^GROQ_API_KEY=(.+)")  { $groqKey     = $Matches[1].Trim() }
-        if ($line -match "^LLM_BACKEND=(.+)")   { $llmBackend  = $Matches[1].Trim() }
         if ($line -match "^OLLAMA_URL=(.+)")    { $ollamaUrl   = $Matches[1].Trim() }
         if ($line -match "^OLLAMA_MODEL=(.+)")  { $ollamaModel = $Matches[1].Trim() }
-        if ($line -match "^GROQ_MODEL=(.+)")    { $groqModel   = $Matches[1].Trim() }
     }
 }
 
@@ -61,10 +55,7 @@ if ($ollamaUrl -match "localhost") {
     Write-Warn "OLLAMA_URL: localhost remplace par host.docker.internal (requis en k8s)"
 }
 
-Write-OK "LLM_BACKEND=$llmBackend  OLLAMA=$ollamaUrl"
-if ($llmBackend -eq "groq" -and (-not $groqKey)) {
-    Write-Warn "GROQ_API_KEY absente — PoliBot degrade"
-}
+Write-OK "Backend LLM : Ollama  ->  $ollamaUrl  (modele : $ollamaModel)"
 
 # ── Build des images Docker ───────────────────────────────────────────────────
 if (-not $SkipBuild) {
@@ -95,11 +86,9 @@ Write-OK "namespace poligraph"
 Write-Step "3" "Secret (cles API)"
 kubectl create secret generic poligraph-secrets `
     --namespace=poligraph `
-    --from-literal=GROQ_API_KEY="$groqKey" `
-    --from-literal=LLM_BACKEND="$llmBackend" `
+    --from-literal=LLM_BACKEND="ollama" `
     --from-literal=OLLAMA_URL="$ollamaUrl" `
     --from-literal=OLLAMA_MODEL="$ollamaModel" `
-    --from-literal=GROQ_MODEL="$groqModel" `
     --dry-run=client -o yaml | kubectl apply -f -
 Write-OK "Secret poligraph-secrets"
 

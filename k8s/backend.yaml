@@ -33,11 +33,6 @@ spec:
               value: "1"
             - name: SENTIMENT_MODEL
               value: "lxyuan/distilbert-base-multilingual-cased-sentiments-student"
-            - name: GROQ_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: poligraph-secrets
-                  key: GROQ_API_KEY
             - name: LLM_BACKEND
               valueFrom:
                 secretKeyRef:
@@ -53,11 +48,6 @@ spec:
                 secretKeyRef:
                   name: poligraph-secrets
                   key: OLLAMA_MODEL
-            - name: GROQ_MODEL
-              valueFrom:
-                secretKeyRef:
-                  name: poligraph-secrets
-                  key: GROQ_MODEL
           readinessProbe:
             httpGet:
               path: /api/health
