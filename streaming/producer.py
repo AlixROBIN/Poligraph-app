@@ -14,6 +14,7 @@ import hashlib
 import json
 import logging
 import os
+import sys
 import time
 from collections import OrderedDict
 from datetime import datetime, timezone
@@ -24,9 +25,11 @@ from kafka import KafkaProducer
 from kafka.errors import NoBrokersAvailable
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+# Supprime les logs verbeux de kafka-python (BrokerConnection, etc.)
+logging.getLogger("kafka").setLevel(logging.WARNING)
 log = logging.getLogger(__name__)
 
-BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS")
 TOPIC             = "raw-articles"
 SCRAPE_INTERVAL   = int(os.getenv("SCRAPE_INTERVAL", "300"))
 
@@ -51,7 +54,7 @@ def article_id(url: str) -> str:
 
 
 def build_producer() -> KafkaProducer:
-    for attempt in range(10):
+    for attempt in range(3):
         try:
             producer = KafkaProducer(
                 bootstrap_servers=BOOTSTRAP_SERVERS,
@@ -134,6 +137,9 @@ def scrape_reddit_rss() -> list[dict]:
 
 
 def run():
+    if not BOOTSTRAP_SERVERS:
+        log.info("KAFKA_BOOTSTRAP_SERVERS non défini — mode sans Kafka, producer inutile (l'API scrappe les RSS directement).")
+        sys.exit(0)
     producer  = build_producer()
     seen_ids: OrderedDict[str, None] = OrderedDict()
 

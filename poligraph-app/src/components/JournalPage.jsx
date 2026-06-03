@@ -464,7 +464,7 @@ const JournalPage = () => {
   const [filterSentiment, setFilterSentiment] = useState("");
   const [kafkaAvailable, setKafkaAvailable] = useState(false);
   const [enriched, setEnriched]             = useState(false);
-  const [sentimentFilterWarning, setSentimentFilterWarning] = useState(false);
+  const [, setSentimentFilterWarning] = useState(false);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const wsRef = useRef(null);
 
