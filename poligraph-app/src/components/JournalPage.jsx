@@ -4,13 +4,25 @@ import { fetchJSON } from "../data/api";
 // ── Config sources ────────────────────────────────────────────────────────────
 
 const SOURCES_CONFIG = {
-  lemonde:              { label: "Le Monde",            type: "presse",  color: "#0066CC", bg: "#e8f0fb" },
-  lefigaro:             { label: "Le Figaro",           type: "presse",  color: "#C00000", bg: "#fdecea" },
-  liberation:           { label: "Libération",          type: "presse",  color: "#E4002B", bg: "#fff0f0" },
-  franceinfo:           { label: "France Info",         type: "presse",  color: "#003189", bg: "#e8eaf6" },
-  lepoint:              { label: "Le Point",            type: "presse",  color: "#2c2c2c", bg: "#f5f5f5" },
-  "reddit/r/france":    { label: "Reddit · r/france",   type: "social",  color: "#FF4500", bg: "#fff3ee" },
-  "reddit/r/politique": { label: "Reddit · r/politique", type: "social", color: "#FF4500", bg: "#fff3ee" },
+  // ── Presse ──────────────────────────────────────────────────────────────
+  lemonde:                { label: "Le Monde",             type: "presse", color: "#0066CC", bg: "#e8f0fb" },
+  lefigaro:               { label: "Le Figaro",            type: "presse", color: "#C00000", bg: "#fdecea" },
+  liberation:             { label: "Libération",           type: "presse", color: "#E4002B", bg: "#fff0f0" },
+  franceinfo:             { label: "France Info",          type: "presse", color: "#003189", bg: "#e8eaf6" },
+  lepoint:                { label: "Le Point",             type: "presse", color: "#2c2c2c", bg: "#f5f5f5" },
+  "googlenews/politique": { label: "Google News",          type: "presse", color: "#4285F4", bg: "#e8f0fe" },
+  "googlenews/parlement": { label: "Google News · Parl.",  type: "presse", color: "#4285F4", bg: "#e8f0fe" },
+  // ── Réseaux sociaux ─────────────────────────────────────────────────────
+  "reddit/r/france":      { label: "Reddit · r/france",   type: "social", color: "#FF4500", bg: "#fff3ee" },
+  "reddit/r/politique":   { label: "Reddit · r/politique", type: "social", color: "#FF4500", bg: "#fff3ee" },
+  "bluesky/politique":    { label: "Bluesky · Politique", type: "social", color: "#0085FF", bg: "#e8f4ff" },
+  "bluesky/france":       { label: "Bluesky · France",    type: "social", color: "#0085FF", bg: "#e8f4ff" },
+  "mastodon/politique":   { label: "Mastodon · Politique", type: "social", color: "#6364FF", bg: "#f0f0ff" },
+  "mastodon/parlement":   { label: "Mastodon · Parlement", type: "social", color: "#6364FF", bg: "#f0f0ff" },
+  "mastodon/france":      { label: "Mastodon · France",   type: "social", color: "#6364FF", bg: "#f0f0ff" },
+  "x/politique":          { label: "X · Politique",       type: "social", color: "#14171A", bg: "#f7f7f7" },
+  "threads/politique":    { label: "Threads · Politique", type: "social", color: "#000000", bg: "#f5f5f5" },
+  "facebook/politique":   { label: "Facebook · Politique", type: "social", color: "#1877F2", bg: "#e7f0fd" },
 };
 
 const TYPE_ICON = { presse: "📰", social: "💬" };
@@ -22,8 +34,16 @@ const SENTIMENT_CFG = {
   UNKNOWN:  { color: "#bbb",    bg: "#f5f5f5", label: "–",        bar: "#eee"    },
 };
 
-const PRESS_SOURCES  = ["lemonde","lefigaro","liberation","franceinfo","lepoint"];
-const SOCIAL_SOURCES = ["reddit/r/france","reddit/r/politique"];
+const PRESS_SOURCES  = [
+  "lemonde", "lefigaro", "liberation", "franceinfo", "lepoint",
+  "googlenews/politique", "googlenews/parlement",
+];
+const SOCIAL_SOURCES = [
+  "reddit/r/france", "reddit/r/politique",
+  "bluesky/politique", "bluesky/france",
+  "mastodon/politique", "mastodon/parlement",
+  "x/politique", "threads/politique", "facebook/politique",
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -319,7 +339,7 @@ function ArticleDrawer({ article, onClose }) {
               onMouseEnter={e => e.currentTarget.style.opacity = "0.88"}
               onMouseLeave={e => e.currentTarget.style.opacity = "1"}
             >
-              {isSocial ? "Voir le post sur Reddit →" : "Lire l'article complet →"}
+              {isSocial ? "Voir le post original →" : "Lire l'article complet →"}
             </a>
           )}
         </div>

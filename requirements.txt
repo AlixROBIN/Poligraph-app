@@ -23,6 +23,7 @@ kafka-python>=2.0.2
 
 # ── Scraping ───────────────────────────────────────────────────────────────
 feedparser>=6.0.10
+# facebook-scraper     # Pages Facebook publiques (optionnel) — pip install facebook-scraper
 # praw>=7.7.1          # Reddit API — décommenter si REDDIT_CLIENT_ID configuré
 
 # ── NLP / Sentiment ────────────────────────────────────────────────────────

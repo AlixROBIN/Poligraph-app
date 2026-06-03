@@ -628,11 +628,13 @@ SOURCE_LABELS = {
     "bluesky/politique":    "Bluesky · Politique",
     "bluesky/france":       "Bluesky · France",
     "mastodon/politique":   "Mastodon · #politique",
-    "mastodon/france":      "Mastodon · #france",
-    # Réseaux sociaux — API restreintes (nécessitent compte/token)
-    "x/politique":          "X · Politique",       # nécessite X_BEARER_TOKEN
-    "threads/politique":    "Threads · Politique",  # nécessite THREADS_TOKEN
-    "facebook/politique":   "Facebook · Politique", # nécessite FB_ACCESS_TOKEN
+    "mastodon/parlement":   "Mastodon · #parlement",
+    # X (Nitter RSS — aucun token requis)
+    "x/politique":          "X · Politique",
+    # Threads (RSSHub public)
+    "threads/politique":    "Threads · Politique",
+    # Facebook (facebook-scraper, pages publiques)
+    "facebook/politique":   "Facebook · Politique",
 }
 
 RSS_FEEDS = [
@@ -661,11 +663,65 @@ BLUESKY_QUERIES = [
 
 # Mastodon — instances françaises, API publique sans authentification
 MASTODON_TAGS = [
-    ("mastodon/politique", "piaille.fr",      "politique"),
-    ("mastodon/france",    "mastodon.social",  "france"),
+    ("mastodon/politique", "piaille.fr", "politique"),
+    ("mastodon/parlement", "piaille.fr", "parlement"),
+]
+
+# Nitter — frontend Twitter open source, accès RSS sans token
+NITTER_INSTANCES = [
+    "nitter.poast.org",
+    "nitter.privacydev.net",
+    "nitter.cz",
+    "nitter.d420.de",
+]
+NITTER_ACCOUNTS = [
+    "gouvernementFR",
+    "AssembleeNat",
+    "senat",
+    "Elysee_FR",
+    "jlmelenchon",
+    "MLP_officiel",
+    "fxbellamy",
+    "olivierfaure",
+]
+
+THREADS_HANDLES = [
+    "gouvernement.fr",
+    "elysee",
+    "assemblee_nationale",
+]
+
+FACEBOOK_PAGES = [
+    "rassemblementnational",
+    "LaFranceInsoumise",
 ]
 
 _RSS_UA = "PoliGraph/1.0 (github.com/AlixROBIN/Poligraph-app; contact: alixanniv@gmail.com)"
+
+# Mots-clés de politique française — filtre les contenus hors-sujet des réseaux sociaux
+_FR_POLITICS_KW = frozenset({
+    "france", "français", "française", "francais", "francaise",
+    "macron", "premier", "ministre", "gouvernement",
+    "assemblée", "assemblee", "sénat", "senat", "parlement",
+    "député", "depute", "sénateur", "senateur",
+    "élection", "election", "vote", "loi", "décret", "decret",
+    "rn", "lfi", "ps", "lr",
+    "mélenchon", "melenchon", "le pen", "bardella", "attal", "weil", "bayrou",
+    "rassemblement", "insoumise", "socialiste", "republicains", "renaissance",
+    "président", "president", "élysée", "elysee", "matignon",
+    "immigration", "retraite", "budget", "grève", "greve", "manifestation",
+    "fiscal", "impôt", "impot", "chomage", "chômage",
+    "dissolution", "censure", "cohabitation", "legislatif", "legislatives",
+    "zemmour", "faure", "jadot", "glucksmann", "hayer", "retailleau",
+})
+
+
+def _is_french_politics(title: str, summary: str = "") -> bool:
+    """Filtre rapide : renvoie True si le contenu traite de politique française."""
+    text = (title + " " + summary).lower()
+    words = set(re.findall(r'\b\w+\b', text))
+    return bool(words & _FR_POLITICS_KW)
+
 
 # Cache RSS — évite de re-scraper à chaque requête
 _rss_cache: dict = {"articles": [], "fetched_at": 0.0}
@@ -718,13 +774,23 @@ def _strip_html(text: str) -> str:
     return re.sub(r"\s+", " ", s.get_data()).strip()
 
 
+_REDDIT_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+
+
 def _fetch_reddit(source_key: str, subreddit: str) -> list[dict]:
-    """Reddit via JSON API (plus fiable que le flux RSS souvent bloqué)."""
+    """Reddit via JSON API avec UA navigateur (évite le blocage bot)."""
     import hashlib, requests as _r
     from datetime import datetime, timezone
     try:
         url  = f"https://www.reddit.com/r/{subreddit}/hot.json?limit=25"
-        resp = _r.get(url, headers={"User-Agent": _RSS_UA}, timeout=15)
+        resp = _r.get(url, headers={"User-Agent": _REDDIT_UA}, timeout=15)
+        if resp.status_code == 429:
+            logger.info(f"[Reddit] {source_key}: rate-limited, passage ignoré")
+            _metric_err(source_key)
+            return []
         resp.raise_for_status()
         children = resp.json()["data"]["children"]
         articles = []
@@ -732,11 +798,14 @@ def _fetch_reddit(source_key: str, subreddit: str) -> list[dict]:
             p = child["data"]
             if p.get("stickied") or not p.get("title"):
                 continue
-            link = f"https://reddit.com{p['permalink']}"
-            body = _strip_html(p.get("selftext", "") or p.get("url", ""))[:800]
+            link  = f"https://reddit.com{p['permalink']}"
+            title = _strip_html(p["title"])
+            body  = _strip_html(p.get("selftext", "") or p.get("url", ""))[:800]
+            if not _is_french_politics(title, body):
+                continue
             articles.append({
                 "id":              hashlib.sha256(link.encode()).hexdigest()[:16],
-                "title":           _strip_html(p["title"]),
+                "title":           title,
                 "summary":         body,
                 "source":          source_key,
                 "source_label":    SOURCE_LABELS.get(source_key, source_key),
@@ -767,16 +836,22 @@ def _fetch_bluesky(source_key: str, query: str) -> list[dict]:
     try:
         resp = _r.get(
             "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts",
-            params={"q": query, "limit": 20, "lang": "fr"},
-            headers={"User-Agent": _RSS_UA},
+            params={"q": query, "limit": 25, "sort": "latest"},
+            headers={"User-Agent": _RSS_UA, "Accept": "application/json"},
             timeout=15,
         )
+        if resp.status_code == 429:
+            logger.info(f"[Bluesky] {source_key}: rate-limited")
+            _metric_err(source_key)
+            return []
         resp.raise_for_status()
         posts = resp.json().get("posts", [])
         articles = []
         for post in posts:
             record  = post.get("record", {})
             text    = record.get("text", "")
+            if not _is_french_politics(text):
+                continue
             uri     = post.get("uri", "")
             author  = post.get("author", {})
             handle  = author.get("handle", "")
@@ -854,7 +929,9 @@ def _fetch_mastodon(source_key: str, instance: str, hashtag: str) -> list[dict]:
             url_post = post.get("url", "")
             account  = post.get("account", {})
             display  = account.get("display_name") or account.get("username", "")
-            if len(content) < 20:   # ignorer les posts vides ou trop courts
+            if len(content) < 20:
+                continue
+            if not _is_french_politics(content):
                 continue
             articles.append({
                 "id":              hashlib.sha256(url_post.encode()).hexdigest()[:16],
@@ -879,54 +956,157 @@ def _fetch_mastodon(source_key: str, instance: str, hashtag: str) -> list[dict]:
         return []
 
 
-def _fetch_x(source_key: str, query: str) -> list[dict]:
+def _fetch_x(source_key: str) -> list[dict]:
     """
-    X (Twitter) — nécessite X_BEARER_TOKEN (API v2, tier Basic $100/mois).
-    Si X_BEARER_TOKEN absent → silencieux (pas d'erreur).
-    Pour activer : créer une app sur developer.twitter.com et définir X_BEARER_TOKEN.
+    X (Twitter) — essaie Nitter RSS en priorité (aucun token), puis API officielle
+    si X_BEARER_TOKEN est défini. Cible les comptes officiels de représentants politiques.
     """
     token = os.getenv("X_BEARER_TOKEN")
-    if not token:
-        return []   # désactivé silencieusement si pas de token
-    import hashlib, requests as _r
+    if token:
+        import hashlib, requests as _r
+        try:
+            resp = _r.get(
+                "https://api.twitter.com/2/tweets/search/recent",
+                params={
+                    "query":        "politique france lang:fr -is:retweet",
+                    "max_results":  20,
+                    "tweet.fields": "created_at,text",
+                },
+                headers={"Authorization": f"Bearer {token}", "User-Agent": _RSS_UA},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            tweets = resp.json().get("data", [])
+            articles = []
+            for tw in tweets:
+                text = tw.get("text", "")
+                tid  = tw.get("id", "")
+                if not _is_french_politics(text):
+                    continue
+                articles.append({
+                    "id":              hashlib.sha256(tid.encode()).hexdigest()[:16],
+                    "title":           text[:120],
+                    "summary":         text[:800],
+                    "source":          source_key,
+                    "source_label":    SOURCE_LABELS.get(source_key, source_key),
+                    "url":             f"https://x.com/i/web/status/{tid}",
+                    "published_at":    tw.get("created_at", ""),
+                    "sentiment":       None, "sentiment_label": None,
+                    "entities":        [], "keywords":         [], "enriched": False,
+                })
+            _metric_ok(source_key, len(articles))
+            logger.info(f"[X/API] {source_key}: {len(articles)} tweets")
+            return articles
+        except Exception as exc:
+            logger.warning(f"[X/API] : {exc} → fallback Nitter")
+
+    # Nitter RSS — comptes officiels de représentants politiques (aucun token requis)
+    import hashlib
+    articles = []
+    for account in NITTER_ACCOUNTS:
+        fetched = False
+        for instance in NITTER_INSTANCES:
+            try:
+                feed = _fetch_feed(f"https://{instance}/{account}/rss")
+                if not feed.entries:
+                    continue
+                for entry in feed.entries[:4]:
+                    link    = entry.get("link", "") or entry.get("id", "")
+                    title   = _strip_html(entry.get("title", ""))
+                    summary = _strip_html(entry.get("summary", "") or "")
+                    if not _is_french_politics(title, summary):
+                        continue
+                    articles.append({
+                        "id":              hashlib.sha256(link.encode()).hexdigest()[:16],
+                        "title":           title[:120],
+                        "summary":         summary[:800],
+                        "source":          source_key,
+                        "source_label":    SOURCE_LABELS.get(source_key, source_key),
+                        "url":             link,
+                        "published_at":    entry.get("published", ""),
+                        "sentiment":       None, "sentiment_label": None,
+                        "entities":        [], "keywords":         [], "enriched": False,
+                    })
+                fetched = True
+                break
+            except Exception:
+                continue
+        if not fetched:
+            logger.debug(f"[X/Nitter] Aucune instance disponible pour @{account}")
+
+    _metric_ok(source_key, len(articles)) if articles else _metric_err(source_key)
+    logger.info(f"[X/Nitter] {source_key}: {len(articles)} tweets")
+    return articles
+
+
+def _fetch_threads(source_key: str, handles: list[str]) -> list[dict]:
+    """
+    Threads — via RSSHub public (rsshub.app).
+    Cible les comptes officiels de représentants et institutions politiques.
+    """
+    import hashlib
+    articles = []
+    for handle in handles:
+        try:
+            feed = _fetch_feed(f"https://rsshub.app/threads/user/{handle}")
+            for entry in feed.entries[:8]:
+                link    = entry.get("link", "") or entry.get("id", "")
+                title   = _strip_html(entry.get("title", ""))
+                summary = _strip_html(entry.get("summary", "") or "")
+                if not _is_french_politics(title, summary):
+                    continue
+                articles.append({
+                    "id":              hashlib.sha256(link.encode()).hexdigest()[:16],
+                    "title":           title[:120],
+                    "summary":         summary[:800],
+                    "source":          source_key,
+                    "source_label":    SOURCE_LABELS.get(source_key, source_key),
+                    "url":             link,
+                    "published_at":    entry.get("published", ""),
+                    "sentiment":       None, "sentiment_label": None,
+                    "entities":        [], "keywords":         [], "enriched": False,
+                })
+        except Exception as exc:
+            logger.debug(f"[Threads] {handle}: {exc}")
+    _metric_ok(source_key, len(articles)) if articles else _metric_err(source_key)
+    logger.info(f"[Threads] {source_key}: {len(articles)} posts")
+    return articles
+
+
+def _fetch_facebook(source_key: str, pages: list[str]) -> list[dict]:
+    """
+    Facebook — pages publiques de partis politiques via facebook-scraper.
+    Nécessite : pip install facebook-scraper  (optionnel, désactivé si absent).
+    """
     try:
-        resp = _r.get(
-            "https://api.twitter.com/2/tweets/search/recent",
-            params={
-                "query":       f"{query} lang:fr -is:retweet",
-                "max_results": 20,
-                "tweet.fields": "created_at,author_id,text",
-            },
-            headers={"Authorization": f"Bearer {token}", "User-Agent": _RSS_UA},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        tweets = resp.json().get("data", [])
-        articles = []
-        for tw in tweets:
-            text = tw.get("text", "")
-            tid  = tw.get("id", "")
-            articles.append({
-                "id":              hashlib.sha256(tid.encode()).hexdigest()[:16],
-                "title":           text[:120],
-                "summary":         text[:800],
-                "source":          source_key,
-                "source_label":    SOURCE_LABELS.get(source_key, source_key),
-                "url":             f"https://x.com/i/web/status/{tid}",
-                "published_at":    tw.get("created_at", ""),
-                "sentiment":       None,
-                "sentiment_label": None,
-                "entities":        [],
-                "keywords":        [],
-                "enriched":        False,
-            })
-        _metric_ok(source_key, len(articles))
-        logger.info(f"[X] {source_key}: {len(articles)} tweets")
-        return articles
-    except Exception as exc:
-        _metric_err(source_key)
-        logger.warning(f"[X] {source_key} : {exc}")
+        from facebook_scraper import get_posts
+    except ImportError:
         return []
+    import hashlib
+    articles = []
+    for page in pages:
+        try:
+            for post in get_posts(page, pages=1, timeout=15):
+                text = post.get("text", "") or post.get("post_text", "") or ""
+                if not text or not _is_french_politics(text):
+                    continue
+                link = post.get("post_url", "") or ""
+                articles.append({
+                    "id":              hashlib.sha256(link.encode()).hexdigest()[:16],
+                    "title":           text[:120],
+                    "summary":         text[:800],
+                    "source":          source_key,
+                    "source_label":    SOURCE_LABELS.get(source_key, source_key),
+                    "url":             link,
+                    "published_at":    str(post.get("time", "")),
+                    "sentiment":       None, "sentiment_label": None,
+                    "entities":        [], "keywords":         [], "enriched": False,
+                })
+        except Exception as exc:
+            logger.debug(f"[Facebook] {page}: {exc}")
+    _metric_ok(source_key, len(articles)) if articles else _metric_err(source_key)
+    logger.info(f"[Facebook] {source_key}: {len(articles)} posts")
+    return articles
 
 
 def _enrich_with_sentiment(articles: list[dict]) -> list[dict]:
@@ -996,15 +1176,29 @@ def _scrape_rss_cached() -> list[dict]:
     for source_key, query in BLUESKY_QUERIES:
         articles.extend(_fetch_bluesky(source_key, query))
 
-    # ── 5. Mastodon (API publique) ─────────────────────────────
+    # ── 5. Mastodon (API publique, comptes politiques) ────────
     for source_key, instance, tag in MASTODON_TAGS:
         articles.extend(_fetch_mastodon(source_key, instance, tag))
 
-    # ── 6. X — si X_BEARER_TOKEN défini dans l'environnement ──
-    if os.getenv("X_BEARER_TOKEN"):
-        articles.extend(_fetch_x("x/politique", "politique france"))
+    # ── 6. X (Nitter RSS ou API officielle) ───────────────────
+    articles.extend(_fetch_x("x/politique"))
 
-    # ── 4. Sentiment ───────────────────────────────────────────
+    # ── 7. Threads (RSSHub, comptes officiels) ────────────────
+    articles.extend(_fetch_threads("threads/politique", THREADS_HANDLES))
+
+    # ── 8. Facebook (pages publiques partis) ──────────────────
+    articles.extend(_fetch_facebook("facebook/politique", FACEBOOK_PAGES))
+
+    # ── Déduplication par URL ──────────────────────────────────
+    seen = set()
+    unique = []
+    for a in articles:
+        if a["id"] not in seen:
+            seen.add(a["id"])
+            unique.append(a)
+    articles = unique
+
+    # ── Sentiment ──────────────────────────────────────────────
     articles = _enrich_with_sentiment(articles)
 
     _scrape_metrics["total_runs"]     += 1
@@ -1015,6 +1209,14 @@ def _scrape_rss_cached() -> list[dict]:
     _rss_cache["fetched_at"] = now
     logger.info(f"[Scrape] {len(articles)} articles (presse+reddit+bluesky) enrichis")
     return articles
+
+
+@app.post("/api/journal/refresh")
+def journal_refresh():
+    """Vide le cache RSS pour forcer un nouveau scraping au prochain appel."""
+    _rss_cache["fetched_at"] = 0.0
+    _rss_cache["articles"]   = []
+    return {"ok": True, "message": "Cache RSS vidé — les prochains articles seront rechargés."}
 
 
 @app.get("/api/journal")
@@ -1454,11 +1656,11 @@ def _tool_search_scandales(q="", category="", parti="", statut="",
             )
             sc = sc[mask]
         if category:
-            sc = sc[sc["category"] == category]
+            sc = sc[sc["category"].fillna("").str.contains(category, case=False, na=False)]
         if parti:
-            sc = sc[sc["party_short"] == parti]
+            sc = sc[sc["party_short"].fillna("").str.contains(parti, case=False, na=False)]
         if statut:
-            sc = sc[sc["status"] == statut]
+            sc = sc[sc["status"].fillna("").str.contains(statut, case=False, na=False)]
         if annee_min > 0:
             sc = sc[pd.to_numeric(sc["annee_faits"], errors="coerce").fillna(0) >= annee_min]
         if annee_max < 9999:
@@ -1554,18 +1756,17 @@ def _tool_get_recent_articles(q="", limit=8):
         limit = min(int(limit), 20)
         return {
             "total_trouvé": len(articles),
-            "note": "Résumés jusqu'à 800 caractères. Utilisez analyze_political_figure pour un croisement avec la base de données.",
             "articles": [
                 {
                     "titre":      a.get("title", ""),
-                    "résumé":     a.get("summary", ""),
+                    "résumé":     (a.get("summary", "") or "")[:200],
                     "source":     a.get("source_label", a.get("source", "")),
                     "url":        a.get("url", ""),
                     "publié_le":  a.get("published_at", ""),
                     "sentiment":  a.get("sentiment_label"),
                     "score":      a.get("sentiment"),
                 }
-                for a in articles[:limit]
+                for a in articles[:min(limit, 8)]
             ],
         }
     except Exception as e:
@@ -1631,14 +1832,14 @@ def _tool_analyze_political_figure(name: str, parti: str = ""):
             "articles": [
                 {
                     "titre":     a.get("title", ""),
-                    "résumé":    a.get("summary", ""),
+                    "résumé":    (a.get("summary", "") or "")[:200],
                     "source":    a.get("source_label", ""),
                     "sentiment": a.get("sentiment_label"),
                     "score":     a.get("sentiment"),
                     "url":       a.get("url", ""),
                     "date":      a.get("published_at", ""),
                 }
-                for a in relevant[:10]
+                for a in relevant[:6]
             ],
         }
     else:
@@ -1662,14 +1863,13 @@ def _tool_analyze_political_figure(name: str, parti: str = ""):
         if parti:
             mask &= sc["party_short"].fillna("").str.contains(parti, case=False, na=False)
         found = sc[mask]
-        cols = ["title", "category", "status", "annee_faits", "party_short",
-                "sentence", "appeal", "description"]
+        cols = ["title", "category", "status", "annee_faits", "party_short", "sentence"]
         cols = [c for c in cols if c in found.columns]
         result["scandales"] = {
             "total_affaires": len(found),
             "catégories": found["category"].value_counts().to_dict() if not found.empty else {},
             "statuts":    found["status"].value_counts().to_dict()   if not found.empty else {},
-            "affaires":   found[cols].head(8).fillna("").to_dict(orient="records"),
+            "affaires":   found[cols].head(5).fillna("").to_dict(orient="records"),
         }
     except Exception as e:
         result["scandales"] = {"erreur": str(e)}
@@ -1710,28 +1910,36 @@ def _execute_agent_tool(tool_name: str, tool_input: dict) -> dict:
 _AGENT_SYSTEM = """Tu es PoliBot, un agent d'analyse politique française doté de plusieurs sources de données.
 
 ## Tes sources de données
-- **Base de données** : scandales politiques, votes parlementaires, profils d'élus
-- **Presse en temps réel** : Le Monde, Le Figaro, Libération, France Info, Le Point (flux RSS actualisés)
+- **Base de données** : scandales politiques, votes parlementaires, profils d'élus français
+- **Presse vérifiée** : Le Monde, Le Figaro, Libération, France Info, Le Point, Google News
+- **Réseaux sociaux** : comptes officiels de représentants politiques (X, Reddit, Mastodon, Bluesky)
 
 ## Règle fondamentale : toujours croiser les sources
-Pour toute question sur un personnage politique ou une situation politique :
-1. Utilise **analyze_political_figure** en premier — il croise automatiquement presse + DB + profil
+Pour toute question sur un personnage politique ou une situation :
+1. Utilise **analyze_political_figure** EN PREMIER — il croise automatiquement presse + DB + profil
 2. Complète si besoin avec **search_scandales** ou **search_votes**
-3. Formule une analyse argumentée en combinant les deux sources
+3. Formule une analyse argumentée en combinant les deux
 
-## Comment analyser et spéculer
+## Utilisation correcte de search_scandales
+- COMMENCE par `get_statistics("scandales")` pour voir les partis, catégories et statuts disponibles dans la base
+- Le filtre `q` cherche dans le texte (titre, description, nom du politicien)
+- Le filtre `parti` cherche par code parti (RN, LFI, PS, LR, LREM…) — NE PAS combiner `q` et `parti` avec la même valeur
+- Le filtre `statut` accepte des valeurs partielles (ex: "CONDAMN" trouve "CONDAMNÉ", "CONDAMNATION"…)
+- Le filtre `category` accepte des valeurs partielles (ex: "CORRUPT" trouve "CORRUPTION"…)
+- Pour les scandales d'un parti : `parti="RN"` SANS `q` → résultats corrects
+- Les filtres sont insensibles à la casse et aux accents
+
+## Comment analyser
 - Si la presse parle d'un sujet ET que la DB contient des données connexes → croise-les explicitement
-- Si des articles récents mentionnent un débat, une affaire ou une décision → cite-les avec leur source
-- Tu peux et dois **spéculer et formuler des hypothèses** basées sur les données disponibles
-  - Commence par : "D'après les articles récents…", "Selon la base de données…", "En croisant les deux sources…"
-  - Conclus par une analyse personnelle clairement marquée : "Mon analyse :", "Il est probable que…", "On peut estimer que…"
-- Ne dis JAMAIS "je n'ai pas d'information" sans avoir d'abord utilisé analyze_political_figure
+- Cite les sources (nom du journal, date si disponible)
+- Tu peux **spéculer** si les données le permettent, avec des formules claires :
+  "D'après les données…", "Mon analyse :", "Il est probable que…"
+- Ne dis JAMAIS "je n'ai pas d'information" sans avoir utilisé analyze_political_figure
 
 ## Format de réponse
 - Toujours en français
-- Structure : [données factuelles] → [croisement presse × DB] → [analyse/spéculation argumentée]
-- Cite les sources (nom du journal, date si disponible)
-- Mentionne le sentiment médiatique quand il est disponible (positif/négatif/neutre)"""
+- Structure : [données factuelles] → [croisement presse × DB] → [analyse argumentée]
+- Mentionne le sentiment médiatique quand disponible (positif/négatif/neutre)"""
 
 _GROQ_MODEL   = os.getenv("GROQ_MODEL",   "llama-3.1-8b-instant")   # 500k TPD vs 100k pour 70b
 _OLLAMA_URL   = os.getenv("OLLAMA_URL",   "http://localhost:11434")
