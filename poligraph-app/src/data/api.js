@@ -50,37 +50,9 @@ export async function fetchDashboardMining() {
   return res.json();
 }
 
-export async function predictVote({ title, annee = 2025, legislature = 17,
-  use_live_sentiment = true }) {
-  const res = await fetch(`${BASE_URL}/predict/vote`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title, annee, legislature, use_live_sentiment }),
-  });
-  if (!res.ok) throw new Error("Predict vote error");
-  return res.json();
-}
-
-export async function predictScandale({ party = "RN", annee = 2024,
-  institution = "Assemblée nationale", description = "",
-  status = null, top_n = 5, use_live_sentiment = true }) {
-  const res = await fetch(`${BASE_URL}/predict/scandale`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ party, annee, institution, description, status, top_n, use_live_sentiment }),
-  });
-  if (!res.ok) throw new Error("Predict scandale error");
-  return res.json();
-}
-
-export async function predictPolitician({ category = "CORRUPTION", party = "RN",
-  status = "ENQUETE_PRELIMINAIRE", top_n = 5 }) {
-  const res = await fetch(`${BASE_URL}/predict/politician`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ category, party, status, top_n }),
-  });
-  if (!res.ok) throw new Error("Predict politician error");
+export async function fetchSourceMetrics() {
+  const res = await fetch(`${BASE_URL}/metrics/sources`);
+  if (!res.ok) throw new Error("Source metrics error");
   return res.json();
 }
 

@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, CartesianGrid, Cell, PieChart, Pie, Legend,
 } from "recharts";
-import { fetchDashboardScandales, fetchDashboardVotes } from "../data/api";
+import { fetchDashboardScandales, fetchDashboardVotes, fetchSourceMetrics } from "../data/api";
 
 const COLORS = ["#1a3a6e","#e74c3c","#2ecc71","#f39c12","#9b59b6","#1abc9c","#e67e22","#34495e"];
 
@@ -49,15 +49,83 @@ const ClickTooltip = ({ active, payload, label, hint }) => {
   );
 };
 
+const STATUS_COLOR = { ok: "#2ecc71", degraded: "#f39c12", error: "#e74c3c", unknown: "#aaa" };
+const SOURCE_ICON  = {
+  "lemonde": "📰", "lefigaro": "📰", "liberation": "📰",
+  "franceinfo": "📻", "lepoint": "📰",
+  "reddit/r/france": "🟠", "reddit/r/politique": "🟠",
+  "bluesky/politique": "🦋", "bluesky/france": "🦋",
+};
+
+function SourcesCard({ metrics }) {
+  if (!metrics) return null;
+  const { scraping, kafka, dataframes } = metrics;
+  const sources = Object.entries(scraping.sources || {});
+  return (
+    <div style={{ ...cardStyle, marginTop: "1rem" }}>
+      <h3 style={{ margin: "0 0 0.75rem", fontSize: 15, color: "#1a2e5a" }}>
+        Métriques sources &amp; pipeline
+      </h3>
+
+      {/* Grille sources */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px,1fr))", gap: 8, marginBottom: "0.75rem" }}>
+        {sources.map(([key, s]) => (
+          <div key={key} style={{
+            background: "#f8f9fc", borderRadius: 8, padding: "8px 10px",
+            border: `1px solid ${STATUS_COLOR[s.status] || "#e0e0e0"}22`,
+            borderLeft: `3px solid ${STATUS_COLOR[s.status] || "#ccc"}`,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3 }}>
+              <span style={{ fontSize: 14 }}>{SOURCE_ICON[key] || "📡"}</span>
+              <span style={{ fontWeight: 600, fontSize: 12, color: "#333", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</span>
+              <span style={{ marginLeft: "auto", width: 8, height: 8, borderRadius: "50%", background: STATUS_COLOR[s.status] || "#ccc", flexShrink: 0 }} />
+            </div>
+            <div style={{ fontSize: 11, color: "#666" }}>
+              {s.last_count != null ? `${s.last_count} articles` : "—"}
+              {s.success_rate != null && <span style={{ marginLeft: 6, color: s.success_rate >= 80 ? "#2ecc71" : "#e74c3c" }}>{s.success_rate}%</span>}
+            </div>
+            <div style={{ fontSize: 10, color: "#aaa", marginTop: 2 }}>
+              {s.ok} ok · {s.errors} erreurs
+            </div>
+          </div>
+        ))}
+        {sources.length === 0 && (
+          <div style={{ color: "#aaa", fontSize: 12, padding: "0.5rem" }}>
+            Aucune donnée — déclencher le Journal pour initialiser.
+          </div>
+        )}
+      </div>
+
+      {/* Ligne basse : Kafka + DB */}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", borderTop: "1px solid #f0f0f0", paddingTop: 8, fontSize: 12, color: "#666" }}>
+        <span>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: kafka.active ? "#2ecc71" : "#e74c3c", display: "inline-block", marginRight: 5 }} />
+          Kafka : <strong>{kafka.active ? "actif" : "inactif"}</strong>
+        </span>
+        <span>🗄️ Scandales : <strong>{dataframes.scandales.toLocaleString()}</strong></span>
+        <span>🗳️ Votes : <strong>{dataframes.votes.toLocaleString()}</strong></span>
+        <span>👤 Élus : <strong>{dataframes.elus.toLocaleString()}</strong></span>
+        {scraping.last_run_at && (
+          <span style={{ marginLeft: "auto", color: "#aaa" }}>
+            Dernier scrape : {new Date(scraping.last_run_at).toLocaleTimeString("fr-FR")}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const Dashboard = ({ onNavigate }) => {
-  const [sc, setSc] = useState(null);
-  const [vt, setVt] = useState(null);
+  const [sc, setSc]   = useState(null);
+  const [vt, setVt]   = useState(null);
+  const [metrics, setMetrics] = useState(null);
   const [err, setErr] = useState(null);
 
   useEffect(() => {
     Promise.all([fetchDashboardScandales(), fetchDashboardVotes()])
       .then(([s, v]) => { setSc(s); setVt(v); })
       .catch((e) => setErr(e.message));
+    fetchSourceMetrics().then(setMetrics).catch(() => {});
   }, []);
 
   if (err) return <p style={{ color: "red", padding: "2rem" }}>Erreur : {err}</p>;
@@ -246,6 +314,9 @@ const Dashboard = ({ onNavigate }) => {
           </div>
         </Card>
       </div>
+
+      {/* Métriques sources */}
+      <SourcesCard metrics={metrics} />
     </div>
   );
 };

@@ -217,6 +217,41 @@ def health():
     return {"status": "ok", "rows": int(len(df)) if df is not None else 0}
 
 
+@app.get("/api/metrics/sources")
+def metrics_sources():
+    """Métriques de réussite du scraping par source + état Kafka."""
+    sources_out = {}
+    for key, s in _scrape_metrics["sources"].items():
+        total = s["ok"] + s["errors"]
+        sources_out[key] = {
+            "label":       SOURCE_LABELS.get(key, key),
+            "ok":          s["ok"],
+            "errors":      s["errors"],
+            "success_rate": round(s["ok"] / total * 100, 1) if total > 0 else None,
+            "last_count":  s["last_count"],
+            "last_at":     s["last_at"],
+            "status":      "ok" if s["errors"] == 0 or s["ok"] >= s["errors"] else "degraded",
+        }
+    kafka_active = bool(_feature_consumer and _feature_consumer.is_running)
+    return {
+        "scraping": {
+            "total_runs":      _scrape_metrics["total_runs"],
+            "last_run_at":     _scrape_metrics["last_run_at"],
+            "total_articles":  _scrape_metrics["total_articles"],
+            "sources":         sources_out,
+        },
+        "kafka": {
+            "active":          kafka_active,
+            "bootstrap":       os.getenv("KAFKA_BOOTSTRAP_SERVERS", "non configuré"),
+        },
+        "dataframes": {
+            "scandales": int(len(_df_scandales)) if _df_scandales is not None else 0,
+            "votes":     int(len(_df_votes))     if _df_votes     is not None else 0,
+            "elus":      int(len(_df_elus))      if _df_elus      is not None else 0,
+        },
+    }
+
+
 @app.get("/api/data")
 def api_data(limit: int = 100, offset: int = 0):
     result = df.iloc[offset: offset + limit]
@@ -585,6 +620,8 @@ SOURCE_LABELS = {
     "lepoint":           "Le Point",
     "reddit/r/france":   "Reddit · r/france",
     "reddit/r/politique":"Reddit · r/politique",
+    "bluesky/politique": "Bluesky · Politique",
+    "bluesky/france":    "Bluesky · France",
 }
 
 RSS_FEEDS = [
@@ -595,16 +632,41 @@ RSS_FEEDS = [
     ("lepoint",    "https://www.lepoint.fr/politique/rss.xml"),
 ]
 
-REDDIT_FEEDS = [
-    ("reddit/r/france",    "https://www.reddit.com/r/france/hot/.rss?limit=25"),
-    ("reddit/r/politique", "https://www.reddit.com/r/politique/hot/.rss?limit=25"),
+REDDIT_SUBS = [
+    ("reddit/r/france",    "france"),
+    ("reddit/r/politique", "politique"),
 ]
 
-_RSS_UA = "PoliGraph/1.0 (https://github.com/poligraph; data engineering portfolio)"
+BLUESKY_QUERIES = [
+    ("bluesky/politique", "politique france"),
+    ("bluesky/france",    "assemblée nationale"),
+]
+
+_RSS_UA = "PoliGraph/1.0 (github.com/AlixROBIN/Poligraph-app; contact: alixanniv@gmail.com)"
 
 # Cache RSS — évite de re-scraper à chaque requête
 _rss_cache: dict = {"articles": [], "fetched_at": 0.0}
 _RSS_TTL = 300  # 5 minutes
+
+# Métriques de scraping par source
+_scrape_metrics: dict = {
+    "total_runs":     0,
+    "last_run_at":    None,
+    "total_articles": 0,
+    "sources":        {},  # source_key → {ok, errors, last_count, last_at}
+}
+
+
+def _metric_ok(source: str, count: int):
+    import time
+    s = _scrape_metrics["sources"].setdefault(source, {"ok": 0, "errors": 0, "last_count": 0, "last_at": None})
+    s["ok"]         += 1
+    s["last_count"]  = count
+    s["last_at"]     = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _metric_err(source: str):
+    _scrape_metrics["sources"].setdefault(source, {"ok": 0, "errors": 0, "last_count": 0, "last_at": None})["errors"] += 1
 
 
 def _fetch_feed(url: str):
@@ -618,7 +680,6 @@ def _fetch_feed(url: str):
 
 
 def _strip_html(text: str) -> str:
-    """Strip HTML tags and decode entities from a string."""
     if not text:
         return ""
     class _MLStripper(HTMLParser):
@@ -631,9 +692,94 @@ def _strip_html(text: str) -> str:
             return " ".join(self.fed)
     s = _MLStripper()
     s.feed(text)
-    clean = s.get_data()
-    clean = re.sub(r"\s+", " ", clean).strip()
-    return clean
+    return re.sub(r"\s+", " ", s.get_data()).strip()
+
+
+def _fetch_reddit(source_key: str, subreddit: str) -> list[dict]:
+    """Reddit via JSON API (plus fiable que le flux RSS souvent bloqué)."""
+    import hashlib, requests as _r
+    from datetime import datetime, timezone
+    try:
+        url  = f"https://www.reddit.com/r/{subreddit}/hot.json?limit=25"
+        resp = _r.get(url, headers={"User-Agent": _RSS_UA}, timeout=15)
+        resp.raise_for_status()
+        children = resp.json()["data"]["children"]
+        articles = []
+        for child in children:
+            p = child["data"]
+            if p.get("stickied") or not p.get("title"):
+                continue
+            link = f"https://reddit.com{p['permalink']}"
+            body = _strip_html(p.get("selftext", "") or p.get("url", ""))[:800]
+            articles.append({
+                "id":              hashlib.sha256(link.encode()).hexdigest()[:16],
+                "title":           _strip_html(p["title"]),
+                "summary":         body,
+                "source":          source_key,
+                "source_label":    SOURCE_LABELS.get(source_key, source_key),
+                "url":             link,
+                "published_at":    datetime.fromtimestamp(
+                                       p["created_utc"], tz=timezone.utc
+                                   ).isoformat(),
+                "sentiment":       None,
+                "sentiment_label": None,
+                "entities":        [],
+                "keywords":        [],
+                "enriched":        False,
+                "score":           p.get("score", 0),
+                "comments":        p.get("num_comments", 0),
+            })
+        _metric_ok(source_key, len(articles))
+        logger.info(f"[Reddit] {source_key}: {len(articles)} posts")
+        return articles
+    except Exception as exc:
+        _metric_err(source_key)
+        logger.warning(f"[Reddit] {source_key} : {exc}")
+        return []
+
+
+def _fetch_bluesky(source_key: str, query: str) -> list[dict]:
+    """Posts Bluesky via API publique (sans authentification)."""
+    import hashlib, requests as _r
+    try:
+        resp = _r.get(
+            "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts",
+            params={"q": query, "limit": 20, "lang": "fr"},
+            headers={"User-Agent": _RSS_UA},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        posts = resp.json().get("posts", [])
+        articles = []
+        for post in posts:
+            record  = post.get("record", {})
+            text    = record.get("text", "")
+            uri     = post.get("uri", "")
+            author  = post.get("author", {})
+            handle  = author.get("handle", "")
+            rkey    = uri.split("/")[-1] if "/" in uri else uri
+            url_post = f"https://bsky.app/profile/{handle}/post/{rkey}"
+            articles.append({
+                "id":              hashlib.sha256(uri.encode()).hexdigest()[:16],
+                "title":           text[:120],
+                "summary":         text[:800],
+                "source":          source_key,
+                "source_label":    SOURCE_LABELS.get(source_key, source_key),
+                "url":             url_post,
+                "published_at":    record.get("createdAt", ""),
+                "sentiment":       None,
+                "sentiment_label": None,
+                "entities":        [],
+                "keywords":        [],
+                "enriched":        False,
+            })
+        _metric_ok(source_key, len(articles))
+        logger.info(f"[Bluesky] {source_key}: {len(articles)} posts")
+        return articles
+    except Exception as exc:
+        _metric_err(source_key)
+        logger.warning(f"[Bluesky] {source_key} : {exc}")
+        return []
 
 
 def _enrich_with_sentiment(articles: list[dict]) -> list[dict]:
@@ -657,23 +803,21 @@ def _enrich_with_sentiment(articles: list[dict]) -> list[dict]:
 
 def _scrape_rss_cached() -> list[dict]:
     import hashlib, time
+    from datetime import datetime, timezone
     now = time.time()
     if now - _rss_cache["fetched_at"] < _RSS_TTL and _rss_cache["articles"]:
         return _rss_cache["articles"]
 
-    try:
-        from datetime import datetime, timezone
-    except ImportError:
-        return []
-
     articles = []
-    all_feeds = RSS_FEEDS + REDDIT_FEEDS
-    for source, url in all_feeds:
+
+    # ── 1. Presse RSS ──────────────────────────────────────────
+    for source, url in RSS_FEEDS:
         try:
             feed = _fetch_feed(url)
+            batch = []
             for entry in feed.entries[:20]:
                 link = entry.get("link") or entry.get("id") or ""
-                articles.append({
+                batch.append({
                     "id":              hashlib.sha256(link.encode()).hexdigest()[:16],
                     "title":           _strip_html(entry.get("title", "")),
                     "summary":         _strip_html(entry.get("summary", "") or "")[:800],
@@ -687,15 +831,30 @@ def _scrape_rss_cached() -> list[dict]:
                     "keywords":        [],
                     "enriched":        False,
                 })
+            articles.extend(batch)
+            _metric_ok(source, len(batch))
         except Exception as exc:
+            _metric_err(source)
             logger.debug(f"RSS {source} : {exc}")
 
-    # Enrichissement sentiment (VADER fallback si transformers indisponible)
+    # ── 2. Reddit JSON API ─────────────────────────────────────
+    for source_key, subreddit in REDDIT_SUBS:
+        articles.extend(_fetch_reddit(source_key, subreddit))
+
+    # ── 3. Bluesky ─────────────────────────────────────────────
+    for source_key, query in BLUESKY_QUERIES:
+        articles.extend(_fetch_bluesky(source_key, query))
+
+    # ── 4. Sentiment ───────────────────────────────────────────
     articles = _enrich_with_sentiment(articles)
+
+    _scrape_metrics["total_runs"]     += 1
+    _scrape_metrics["last_run_at"]     = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    _scrape_metrics["total_articles"] += len(articles)
 
     _rss_cache["articles"]   = articles
     _rss_cache["fetched_at"] = now
-    logger.info(f"[RSS] {len(articles)} articles scrapés + sentiment enrichi (fallback Kafka)")
+    logger.info(f"[Scrape] {len(articles)} articles (presse+reddit+bluesky) enrichis")
     return articles
 
 
