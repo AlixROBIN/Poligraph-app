@@ -44,6 +44,12 @@ export async function fetchDashboardVotes() {
   return res.json();
 }
 
+export async function fetchDashboardVotesGroupes() {
+  const res = await fetch(`${BASE_URL}/dashboard/votes/groupes`);
+  if (!res.ok) throw new Error("Dashboard votes groupes error");
+  return res.json();
+}
+
 export async function fetchDashboardMining() {
   const res = await fetch(`${BASE_URL}/dashboard/mining`);
   if (!res.ok) throw new Error("Dashboard mining error");

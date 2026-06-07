@@ -81,21 +81,29 @@ const ScandalDetail = ({ row, onClose }) => (
 
 // ---- Détail vote ----
 const VoteDetail = ({ row, onClose }) => {
-  const [groupes, setGroupes] = useState(null);
+  const [groupes, setGroupes]   = useState(null);
+  const [loadingG, setLoadingG] = useState(false);
 
   useEffect(() => {
-    if (row.scrutinRef) {
-      fetch(`${PROXY_URL}/scrutins/${row.scrutinRef}/groupes`)
-        .then((r) => r.ok ? r.json() : null)
-        .then((d) => setGroupes(d?.groupes || []))
-        .catch(() => setGroupes([]));
-    }
-  }, [row.scrutinRef]);
+    const ref = row.externalId;
+    if (!ref) return;
+    setLoadingG(true);
+    fetch(`${PROXY_URL}/scrutins/${ref}/groupes`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => setGroupes(d?.groupes || []))
+      .catch(() => setGroupes([]))
+      .finally(() => setLoadingG(false));
+  }, [row.externalId]);
 
   const total = Number(row.totalVotes) || (Number(row.votesFor) + Number(row.votesAgainst) + Number(row.votesAbstain)) || 1;
-  const pctFor     = Math.round((Number(row.votesFor)     / total) * 100);
-  const pctAgainst = Math.round((Number(row.votesAgainst) / total) * 100);
-  const pctAbstain = Math.round((Number(row.votesAbstain) / total) * 100);
+  const pctFor          = Math.round((Number(row.votesFor)     / total) * 100);
+  const pctAgainst      = Math.round((Number(row.votesAgainst) / total) * 100);
+  const pctAbstain      = Math.round((Number(row.votesAbstain) / total) * 100);
+  const AN_SEATS        = 577; // 17e législature
+  const participation   = Math.round((total / AN_SEATS) * 100);
+  const anUrl = row.sourceUrl || (row.externalId && row.legislature
+    ? `https://www.assemblee-nationale.fr/dyn/${row.legislature}/scrutins/${row.externalId.replace(/.*V(\d+)$/, '$1')}`
+    : null);
   const adopted = row.result === "ADOPTED";
 
   return (
@@ -126,84 +134,141 @@ const VoteDetail = ({ row, onClose }) => {
 
       {/* Barre de vote globale */}
       <div style={{ marginTop: 16 }}>
-        <div style={{ display: "flex", height: 20, borderRadius: 4, overflow: "hidden", gap: 2 }}>
+        <div style={{ display: "flex", height: 22, borderRadius: 5, overflow: "hidden", gap: 2 }}>
           {pctFor > 0 && (
             <div style={{ width: `${pctFor}%`, background: "#2ecc71", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ fontSize: 10, color: "#fff", fontWeight: 700 }}>{pctFor > 5 ? `${pctFor}%` : ""}</span>
+              <span style={{ fontSize: 11, color: "#fff", fontWeight: 700 }}>{pctFor > 5 ? `${pctFor}%` : ""}</span>
             </div>
           )}
           {pctAgainst > 0 && (
             <div style={{ width: `${pctAgainst}%`, background: "#e74c3c", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ fontSize: 10, color: "#fff", fontWeight: 700 }}>{pctAgainst > 5 ? `${pctAgainst}%` : ""}</span>
+              <span style={{ fontSize: 11, color: "#fff", fontWeight: 700 }}>{pctAgainst > 5 ? `${pctAgainst}%` : ""}</span>
             </div>
           )}
           {pctAbstain > 0 && (
             <div style={{ width: `${pctAbstain}%`, background: "#f39c12", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ fontSize: 10, color: "#fff", fontWeight: 700 }}>{pctAbstain > 5 ? `${pctAbstain}%` : ""}</span>
+              <span style={{ fontSize: 11, color: "#fff", fontWeight: 700 }}>{pctAbstain > 5 ? `${pctAbstain}%` : ""}</span>
             </div>
           )}
         </div>
         <div style={{ display: "flex", gap: 20, marginTop: 8, fontSize: 13 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ width: 10, height: 10, borderRadius: 2, background: "#2ecc71", display: "inline-block" }} />
-            <span style={{ color: "#555" }}>Pour : </span><strong>{row.votesFor || 0}</strong>
+            <span style={{ color: "#555" }}>Pour : </span><strong style={{ color: "#1a7a4a" }}>{row.votesFor || 0}</strong>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ width: 10, height: 10, borderRadius: 2, background: "#e74c3c", display: "inline-block" }} />
-            <span style={{ color: "#555" }}>Contre : </span><strong>{row.votesAgainst || 0}</strong>
+            <span style={{ color: "#555" }}>Contre : </span><strong style={{ color: "#c0392b" }}>{row.votesAgainst || 0}</strong>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ width: 10, height: 10, borderRadius: 2, background: "#f39c12", display: "inline-block" }} />
-            <span style={{ color: "#555" }}>Abstention : </span><strong>{row.votesAbstain || 0}</strong>
+            <span style={{ color: "#555" }}>Abstention : </span><strong style={{ color: "#b7770d" }}>{row.votesAbstain || 0}</strong>
           </div>
-          <div style={{ color: "#888", marginLeft: "auto", fontSize: 12 }}>
+          <div style={{ color: "#888", marginLeft: "auto", fontSize: 12, textAlign: "right" }}>
             Total : <strong>{row.totalVotes || total}</strong> votants
+            <div style={{ marginTop: 2, fontSize: 11, color: participation >= 70 ? "#27ae60" : participation >= 50 ? "#f39c12" : "#e74c3c" }}>
+              <strong>{participation}%</strong> de participation ({AN_SEATS} sièges AN)
+            </div>
           </div>
         </div>
       </div>
 
       {/* Détail par groupe parlementaire */}
-      {groupes && groupes.length > 0 && (
-        <div style={{ marginTop: 16, borderTop: "1px solid #e8ecf8", paddingTop: 12 }}>
-          <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, color: "#1a2e5a" }}>
-            Vote par groupe parlementaire <Tip term="groupe" />
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {groupes.map((g, i) => {
-              const gTotal = (g.pour || 0) + (g.contre || 0) + (g.abstention || 0);
-              const gPct   = gTotal > 0 ? Math.round(((g.pour || 0) / gTotal) * 100) : 0;
-              const gColor = g.color || "#1a3a6e";
-              return (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                  <div style={{ width: 80, fontWeight: 600, color: gColor, flexShrink: 0,
-                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                    title={g.name}>
-                    {g.shortName || g.name}
-                  </div>
-                  <div style={{ flex: 1, height: 12, borderRadius: 3, overflow: "hidden",
-                    display: "flex", gap: 1, background: "#f0f0f0" }}>
-                    {g.pour    > 0 && <div style={{ width: `${Math.round((g.pour    / gTotal)*100)}%`, background: "#2ecc71" }} />}
-                    {g.contre  > 0 && <div style={{ width: `${Math.round((g.contre  / gTotal)*100)}%`, background: "#e74c3c" }} />}
-                    {g.abstention > 0 && <div style={{ width: `${Math.round((g.abstention / gTotal)*100)}%`, background: "#f39c12" }} />}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#555", flexShrink: 0, minWidth: 140, textAlign: "right" }}>
-                    <span style={{ color: "#27ae60" }}>{g.pour || 0} pour</span>
-                    {" · "}
-                    <span style={{ color: "#e74c3c" }}>{g.contre || 0} contre</span>
-                    {g.abstention > 0 && <span style={{ color: "#f39c12" }}> · {g.abstention} abs.</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      <div style={{ marginTop: 16, borderTop: "1px solid #e8ecf8", paddingTop: 14 }}>
+        <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#1a2e5a" }}>
+          Répartition par groupe parlementaire <Tip term="groupe" />
+        </p>
 
-      {row.sourceUrl && (
+        {loadingG && (
+          <p style={{ color: "#aaa", fontSize: 12 }}>Chargement des groupes…</p>
+        )}
+
+        {!loadingG && groupes && groupes.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {groupes
+              .filter((g) => (g.pour || 0) + (g.contre || 0) + (g.abstention || 0) > 0)
+              .sort((a, b) => (b.pour || 0) - (a.pour || 0))
+              .map((g, i) => {
+                const gTotal = (g.pour || 0) + (g.contre || 0) + (g.abstention || 0);
+                const pFor   = gTotal > 0 ? Math.round(((g.pour   || 0) / gTotal) * 100) : 0;
+                const pCon   = gTotal > 0 ? Math.round(((g.contre || 0) / gTotal) * 100) : 0;
+                const pAbs   = gTotal > 0 ? Math.round(((g.abstention || 0) / gTotal) * 100) : 0;
+                const gColor = g.color || "#1a3a6e";
+                const label  = g.shortName || g.name || "—";
+                return (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "90px 1fr 130px", alignItems: "center", gap: 10 }}>
+                    {/* Nom du groupe */}
+                    <div style={{
+                      fontWeight: 700, fontSize: 12, color: gColor,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }} title={g.name}>
+                      {label}
+                    </div>
+
+                    {/* Barre stacked */}
+                    <div style={{ height: 18, borderRadius: 4, overflow: "hidden", display: "flex", background: "#f0f0f0" }}>
+                      {pFor > 0 && (
+                        <div style={{ width: `${pFor}%`, background: "#2ecc71", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ fontSize: 10, color: "#fff", fontWeight: 700 }}>{pFor > 8 ? `${pFor}%` : ""}</span>
+                        </div>
+                      )}
+                      {pCon > 0 && (
+                        <div style={{ width: `${pCon}%`, background: "#e74c3c", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ fontSize: 10, color: "#fff", fontWeight: 700 }}>{pCon > 8 ? `${pCon}%` : ""}</span>
+                        </div>
+                      )}
+                      {pAbs > 0 && (
+                        <div style={{ width: `${pAbs}%`, background: "#f39c12", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ fontSize: 10, color: "#fff", fontWeight: 700 }}>{pAbs > 8 ? `${pAbs}%` : ""}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Chiffres */}
+                    <div style={{ fontSize: 11, color: "#555", textAlign: "right", whiteSpace: "nowrap" }}>
+                      <span style={{ color: "#27ae60", fontWeight: 600 }}>{g.pour || 0} ✓</span>
+                      {" · "}
+                      <span style={{ color: "#e74c3c", fontWeight: 600 }}>{g.contre || 0} ✗</span>
+                      {(g.abstention || 0) > 0 && (
+                        <span style={{ color: "#f39c12" }}> · {g.abstention} ~</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        )}
+
+        {!loadingG && groupes && groupes.length === 0 && (
+          <div style={{ fontSize: 12, color: "#888" }}>
+            <span style={{ fontStyle: "italic", color: "#aaa" }}>
+              Le détail par groupe n'est pas disponible ici —
+            </span>{" "}
+            {anUrl ? (
+              <a href={anUrl} target="_blank" rel="noreferrer"
+                style={{ color: "#1a3a6e", fontWeight: 600, textDecoration: "underline" }}>
+                voir le vote nominatif par groupe sur assemblee-nationale.fr →
+              </a>
+            ) : (
+              <span style={{ color: "#aaa" }}>référence du scrutin manquante.</span>
+            )}
+          </div>
+        )}
+
+        {!loadingG && !groupes && (
+          <p style={{ color: "#aaa", fontSize: 12, fontStyle: "italic" }}>
+            Référence du scrutin manquante.
+          </p>
+        )}
+      </div>
+
+      {row.externalId && row.legislature && (
         <div style={{ marginTop: 12, borderTop: "1px solid #d4ddf7", paddingTop: 10 }}>
-          <a href={row.sourceUrl} target="_blank" rel="noreferrer"
+          <a
+            href={`https://www.assemblee-nationale.fr/dyn/${row.legislature}/scrutins/${row.externalId}`}
+            target="_blank" rel="noreferrer"
             style={{ fontSize: 12, color: "#1a3a6e", textDecoration: "underline" }}>
-            → Voir sur le site officiel de l'Assemblée nationale
+            → Voir le scrutin sur l'Assemblée nationale (noms des votants par groupe)
           </a>
         </div>
       )}
@@ -320,6 +385,7 @@ const VoteSearch = ({ filters, initial = {} }) => {
   const [q, setQ]           = useState(initial.q      || "");
   const [result_, setRes]   = useState(initial.result || "");
   const [annee, setAnnee]   = useState(initial.annee  || 0);
+  const [theme, setTheme]   = useState(initial.theme  || "");
   const [offset, setOffset] = useState(0);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -328,16 +394,32 @@ const VoteSearch = ({ filters, initial = {} }) => {
   const search = useCallback(async (off = 0) => {
     setLoading(true);
     setSelected(null);
-    const data = await fetchVotes({ q, result: result_, annee, limit: LIMIT, offset: off });
+    const data = await fetchVotes({ q, result: result_, annee, theme, limit: LIMIT, offset: off });
     setResult(data);
     setOffset(off);
     setLoading(false);
-  }, [q, result_, annee]);
+  }, [q, result_, annee, theme]);
 
   useEffect(() => { search(0); }, [search]);
 
   return (
     <div>
+      {theme && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 12, color: "#888" }}>Filtre thème :</span>
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            background: "#1a3a6e", color: "#fff", borderRadius: 14,
+            padding: "3px 10px", fontSize: 12, fontWeight: 600,
+          }}>
+            {theme}
+            <button onClick={() => setTheme("")} style={{
+              background: "none", border: "none", color: "#fff", cursor: "pointer",
+              fontSize: 14, lineHeight: 1, padding: 0, opacity: 0.7,
+            }}>×</button>
+          </span>
+        </div>
+      )}
       <div style={filterRowStyle}>
         <input style={inputStyle} placeholder="Recherche dans le titre du vote..."
           value={q} onChange={(e) => setQ(e.target.value)}
@@ -397,8 +479,10 @@ const VoteSearch = ({ filters, initial = {} }) => {
                         <td style={{ ...tdStyle, color: "#c0392b", fontWeight: 600 }}>{row.votesAgainst}</td>
                         <td style={{ ...tdStyle, color: "#b7770d" }}>{row.votesAbstain}</td>
                         <td style={tdStyle} onClick={(e) => e.stopPropagation()}>
-                          {row.sourceUrl
-                            ? <a href={row.sourceUrl} target="_blank" rel="noreferrer"
+                          {row.externalId && row.legislature
+                            ? <a href={`https://www.assemblee-nationale.fr/dyn/${row.legislature}/scrutins/${row.externalId}`}
+                                target="_blank" rel="noreferrer"
+                                title="Voir les votants nominatifs sur assemblee-nationale.fr"
                                 style={{ fontSize: 13, color: "#1a3a6e", textDecoration: "none" }}>→</a>
                             : "—"}
                         </td>
@@ -450,10 +534,128 @@ const Pagination = ({ total, offset, limit, onChange }) => {
   );
 };
 
+// ---- Fact-checks ----
+const VERDICT_CFG = {
+  TRUE:         { label: "Vrai",          color: "#27ae60", bg: "#d4f7e8" },
+  MOSTLY_TRUE:  { label: "Plutôt vrai",   color: "#2ecc71", bg: "#e8faf0" },
+  HALF_TRUE:    { label: "Partiellement", color: "#f39c12", bg: "#fef9e7" },
+  MISLEADING:   { label: "Trompeur",      color: "#e67e22", bg: "#fdebd0" },
+  MOSTLY_FALSE: { label: "Plutôt faux",   color: "#e74c3c", bg: "#fdecea" },
+  FALSE:        { label: "Faux",          color: "#c0392b", bg: "#fadbd8" },
+  UNVERIFIABLE: { label: "Invérifiable",  color: "#95a5a6", bg: "#f2f3f4" },
+};
+
+const VerdictBadge = ({ rating }) => {
+  const cfg = VERDICT_CFG[rating] || { label: rating, color: "#888", bg: "#f5f5f5" };
+  return (
+    <span style={{
+      background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}55`,
+      borderRadius: 12, padding: "2px 10px", fontSize: 11, fontWeight: 700,
+      whiteSpace: "nowrap",
+    }}>{cfg.label}</span>
+  );
+};
+
+const FactcheckSearch = ({ initial = {} }) => {
+  const [q,       setQ]       = useState(initial.q       || "");
+  const [verdict, setVerdict] = useState(initial.verdict || "");
+  const [page,    setPage]    = useState(1);
+  const [result,  setResult]  = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const search = useCallback(async (p = 1) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: 20, page: p });
+      if (q)       params.append("q", q);
+      if (verdict) params.append("verdictRating", verdict);
+      const res = await fetch(`${PROXY_URL}/factchecks?${params}`);
+      setResult(res.ok ? await res.json() : null);
+      setPage(p);
+    } catch { setResult(null); }
+    setLoading(false);
+  }, [q, verdict]);
+
+  useEffect(() => { search(1); }, [search]);
+
+  const items = result?.data || [];
+  const total = result?.pagination?.total || 0;
+  const totalPages = result?.pagination?.totalPages || 1;
+
+  return (
+    <div>
+      {/* Barre de recherche */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        <input
+          style={{ flex: 1, minWidth: 200, padding: "8px 12px", border: "1px solid #d0d8f0", borderRadius: 8, fontSize: 13 }}
+          placeholder="Rechercher une déclaration, un politicien…"
+          value={q} onChange={e => setQ(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && search(1)}
+        />
+        <select style={selectStyle} value={verdict} onChange={e => { setVerdict(e.target.value); }}>
+          <option value="">Tous verdicts</option>
+          {Object.entries(VERDICT_CFG).map(([k, v]) => (
+            <option key={k} value={k}>{v.label}</option>
+          ))}
+        </select>
+        <button style={btnStyle} onClick={() => search(1)}>Rechercher</button>
+      </div>
+
+      {loading && <p style={{ color: "#aaa", fontSize: 13 }}>Chargement…</p>}
+
+      {!loading && (
+        <>
+          <p style={{ fontSize: 12, color: "#888", marginBottom: 10 }}>
+            {total.toLocaleString()} fact-check{total > 1 ? "s" : ""} — sources : AFP Factuel, TF1 Info, Franceinfo, Le Monde…
+          </p>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {items.map((fc, i) => (
+              <a key={i} href={fc.sourceUrl} target="_blank" rel="noreferrer"
+                style={{ textDecoration: "none", color: "inherit" }}>
+                <div style={{
+                  border: "1px solid #e8ecf8", borderRadius: 10, padding: "12px 14px",
+                  background: "#fff", transition: "box-shadow 0.15s",
+                  borderLeft: `4px solid ${(VERDICT_CFG[fc.verdictRating] || {}).color || "#ccc"}`,
+                }}
+                  onMouseEnter={e => e.currentTarget.style.boxShadow = "0 2px 12px rgba(26,58,110,0.10)"}
+                  onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}
+                >
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 6 }}>
+                    <VerdictBadge rating={fc.verdictRating} />
+                    <span style={{ fontSize: 11, color: "#aaa" }}>{fc.source}</span>
+                    <span style={{ fontSize: 11, color: "#aaa", marginLeft: "auto" }}>
+                      {fc.publishedAt ? new Date(fc.publishedAt).toLocaleDateString("fr-FR") : ""}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2e5a", marginBottom: 4 }}>
+                    {fc.claimant && <span style={{ color: "#555", fontWeight: 400 }}>{fc.claimant} : </span>}
+                    « {fc.claimText?.slice(0, 160)}{fc.claimText?.length > 160 ? "…" : ""} »
+                  </div>
+                  <div style={{ fontSize: 12, color: "#888" }}>{fc.title}</div>
+                </div>
+              </a>
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "center" }}>
+              <button style={btnStyle} disabled={page <= 1} onClick={() => search(page - 1)}>← Précédent</button>
+              <span style={{ fontSize: 13, color: "#888", alignSelf: "center" }}>Page {page}/{totalPages}</span>
+              <button style={btnStyle} disabled={page >= totalPages} onClick={() => search(page + 1)}>Suivant →</button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
 // ---- Page principale ----
 const TABS = [
-  { id: "scandales", label: "Scandales" },
-  { id: "votes",     label: "Votes" },
+  { id: "scandales",   label: "Scandales" },
+  { id: "votes",       label: "Votes" },
+  { id: "factchecks",  label: "Fact-checks" },
 ];
 
 const ExplorationPage = ({ initialFilters = {} }) => {
@@ -512,8 +714,9 @@ const ExplorationPage = ({ initialFilters = {} }) => {
         boxShadow: "0 1px 6px rgba(26,58,110,0.08)",
         border: "1px solid #e8ecf8",
       }}>
-        {tab === "scandales" && <ScandalSearch filters={filters} initial={initialFilters} />}
-        {tab === "votes"     && <VoteSearch    filters={filters} initial={initialFilters} />}
+        {tab === "scandales"  && <ScandalSearch  filters={filters} initial={initialFilters} />}
+        {tab === "votes"      && <VoteSearch     filters={filters} initial={initialFilters} />}
+        {tab === "factchecks" && <FactcheckSearch initial={initialFilters} />}
       </div>
     </div>
   );

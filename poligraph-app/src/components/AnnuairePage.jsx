@@ -50,18 +50,32 @@ const Pager = ({ pagination, onPage }) => {
 // ============================================================
 // Profil d'un élu
 // ============================================================
-const PTABS = ["Mandats", "Scandales", "Votes", "Relations"];
+const PTABS = ["Mandats", "Scandales", "Votes", "Fact-checks", "Relations"];
+
+const FC_VERDICT = {
+  TRUE:         { label: "Vrai",          color: "#27ae60", bg: "#d4f7e8" },
+  MOSTLY_TRUE:  { label: "Plutôt vrai",   color: "#2ecc71", bg: "#e8faf0" },
+  HALF_TRUE:    { label: "Partiel",       color: "#f39c12", bg: "#fef9e7" },
+  MISLEADING:   { label: "Trompeur",      color: "#e67e22", bg: "#fdebd0" },
+  MOSTLY_FALSE: { label: "Plutôt faux",   color: "#e74c3c", bg: "#fdecea" },
+  FALSE:        { label: "Faux",          color: "#c0392b", bg: "#fadbd8" },
+  UNVERIFIABLE: { label: "Invérifiable",  color: "#95a5a6", bg: "#f2f3f4" },
+};
 
 const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
-  const [profile,      setProfile]      = useState(null);
-  const [tab,          setTab]          = useState("Mandats");
-  const [affaires,     setAffaires]     = useState(null);
-  const [votes,        setVotes]        = useState(null);
-  const [votePage,     setVotePage]     = useState(1);
-  const [relations,    setRelations]    = useState(null);
-  const [partyMembers, setPartyMembers] = useState(null);
-  const [loading,      setLoading]      = useState(true);
-  const [error,        setError]        = useState(null);
+  const [profile,        setProfile]        = useState(null);
+  const [tab,            setTab]            = useState("Mandats");
+  const [affaires,       setAffaires]       = useState(null);
+  const [votes,          setVotes]          = useState(null);
+  const [votePage,       setVotePage]       = useState(1);
+  const [factchecks,     setFactchecks]     = useState(null);
+  const [relations,      setRelations]      = useState(null);
+  const [partyMembers,   setPartyMembers]   = useState(null);
+  const [partyPage,      setPartyPage]      = useState(1);
+  const [partyTotal,     setPartyTotal]     = useState(0);
+  const [loadingParty,   setLoadingParty]   = useState(false);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState(null);
 
   useEffect(() => {
     setLoading(true); setError(null);
@@ -71,18 +85,42 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
       .finally(() => setLoading(false));
   }, [slug]);
 
+  // Fetch party members — tries currentParty.slug then shortName.toLowerCase() as fallback
+  const fetchPartyMembers = useCallback(async (partyInfo, page = 1) => {
+    if (!partyInfo) return;
+    const slugsToTry = [
+      partyInfo.slug,
+      partyInfo.shortName?.toLowerCase(),
+      partyInfo.name?.toLowerCase().replace(/\s+/g, "-"),
+    ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+
+    setLoadingParty(true);
+    for (const s of slugsToTry) {
+      try {
+        const res = await apiFetch(`partis/${s}/membres`, { limit: 50, page });
+        if (res?.data?.length > 0) {
+          setPartyMembers((prev) => page === 1 ? res.data : [...(prev || []), ...res.data]);
+          setPartyTotal(res.pagination?.total || res.data.length);
+          setPartyPage(page);
+          setLoadingParty(false);
+          return;
+        }
+      } catch {}
+    }
+    if (page === 1) setPartyMembers([]);
+    setLoadingParty(false);
+  }, []);
+
   useEffect(() => {
     if (tab === "Scandales" && !affaires)
       apiFetch(`politiques/${slug}/affaires`).then(setAffaires).catch(() => setAffaires({ affairs: [] }));
-    if (tab === "Relations" && !relations) {
+    if (tab === "Fact-checks" && !factchecks)
+      apiFetch(`politiques/${slug}/factchecks`, { limit: 30 }).then(setFactchecks).catch(() => setFactchecks({ factchecks: [] }));
+    if (tab === "Relations" && !relations)
       apiFetch(`politiques/${slug}/relations`).then(setRelations).catch(() => setRelations({ clusters: [] }));
-    }
-    if (tab === "Relations" && !partyMembers && profile?.currentParty?.slug) {
-      apiFetch(`partis/${profile.currentParty.slug}/membres`, { limit: 24, page: 1 })
-        .then((res) => setPartyMembers(res?.data || []))
-        .catch(() => setPartyMembers([]));
-    }
-  }, [tab, slug, affaires, relations, partyMembers, profile]);
+    if (tab === "Relations" && partyMembers === null && profile?.currentParty)
+      fetchPartyMembers(profile.currentParty, 1);
+  }, [tab, slug, affaires, factchecks, relations, partyMembers, profile, fetchPartyMembers]);
 
   useEffect(() => {
     if (tab === "Votes")
@@ -241,35 +279,115 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
             </>
         )}
 
+        {/* Fact-checks */}
+        {tab === "Fact-checks" && (() => {
+          if (!factchecks) return <p style={{ color: "#888" }}>Chargement…</p>;
+          const fcs = factchecks.factchecks || [];
+          const total = factchecks.total || 0;
+          if (!fcs.length) return <p style={{ color: "#aaa", fontStyle: "italic" }}>Aucun fact-check trouvé pour cet élu.</p>;
+
+          // Stats verdicts
+          const counts = {};
+          fcs.forEach(fc => { counts[fc.verdictRating] = (counts[fc.verdictRating] || 0) + 1; });
+          const trueCount = (counts.TRUE || 0) + (counts.MOSTLY_TRUE || 0);
+          const falseCount = (counts.FALSE || 0) + (counts.MOSTLY_FALSE || 0);
+
+          return (
+            <div>
+              {/* Score résumé */}
+              <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+                <div style={{ background: "#d4f7e8", borderRadius: 10, padding: "8px 14px", textAlign: "center" }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: "#27ae60" }}>{Math.round(trueCount / total * 100)}%</div>
+                  <div style={{ fontSize: 11, color: "#555" }}>vrais ({trueCount})</div>
+                </div>
+                <div style={{ background: "#fadbd8", borderRadius: 10, padding: "8px 14px", textAlign: "center" }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: "#c0392b" }}>{Math.round(falseCount / total * 100)}%</div>
+                  <div style={{ fontSize: 11, color: "#555" }}>faux ({falseCount})</div>
+                </div>
+                <div style={{ background: "#f0f0f0", borderRadius: 10, padding: "8px 14px", textAlign: "center" }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: "#555" }}>{total}</div>
+                  <div style={{ fontSize: 11, color: "#555" }}>fact-checks</div>
+                </div>
+              </div>
+
+              {/* Liste */}
+              {fcs.map((fc, i) => {
+                const cfg = FC_VERDICT[fc.verdictRating] || { label: fc.verdictRating, color: "#888", bg: "#f5f5f5" };
+                return (
+                  <a key={i} href={fc.sourceUrl} target="_blank" rel="noreferrer"
+                    style={{ display: "block", textDecoration: "none", color: "inherit", padding: "10px 0", borderBottom: "1px solid #f0f0f0" }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
+                      <span style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}55`, borderRadius: 12, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>
+                        {cfg.label}
+                      </span>
+                      <span style={{ fontSize: 11, color: "#aaa" }}>{fc.source}</span>
+                      <span style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}>
+                        {fc.publishedAt ? new Date(fc.publishedAt).toLocaleDateString("fr-FR") : ""}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 13, color: "#1a2e5a" }}>
+                      « {fc.claimText?.slice(0, 140)}{fc.claimText?.length > 140 ? "…" : ""} »
+                    </div>
+                  </a>
+                );
+              })}
+            </div>
+          );
+        })()}
+
         {/* Relations */}
         {tab === "Relations" && (
           <div>
             {/* Collègues de parti */}
-            {partyMembers && partyMembers.filter(m => m.slug !== slug).length > 0 && (
+            {profile.currentParty && (
               <div style={{ marginBottom: 20 }}>
                 <h4 style={{ margin: "0 0 4px", color: "#1a3a6e", fontSize: 13, fontWeight: 700 }}>
-                  Collègues du même parti — {profile.currentParty?.shortName || profile.currentParty?.name}
+                  Membres du même parti — {profile.currentParty?.shortName || profile.currentParty?.name}
+                  {partyTotal > 0 && <span style={{ fontWeight: 400, color: "#888", marginLeft: 6 }}>({partyTotal} au total)</span>}
                 </h4>
                 <p style={{ margin: "0 0 10px", fontSize: 11, color: "#aaa" }}>
-                  Membres actifs du même groupe parlementaire
+                  Représentants du même groupe politique
                 </p>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {partyMembers.filter(m => m.slug !== slug).slice(0, 20).map((m, mi) => (
-                    <div key={mi}
-                      onClick={() => m.slug && onSelectSlug(m.slug)}
-                      style={{ display:"flex", alignItems:"center", gap:6,
-                        padding:"4px 10px", background:"#eef6ff", borderRadius:20,
-                        fontSize:12, border:`1px solid ${profile.currentParty?.color || "#1a3a6e"}44`,
-                        cursor: m.slug ? "pointer" : "default",
-                        transition: "border 0.15s, background 0.15s" }}
-                      onMouseEnter={(e) => { if (m.slug) { e.currentTarget.style.background="#ddeeff"; }}}
-                      onMouseLeave={(e) => { e.currentTarget.style.background="#eef6ff"; }}>
-                      {m.photoUrl && <img src={m.photoUrl} alt="" style={{ width:20, height:20, borderRadius:"50%", objectFit:"cover"}} />}
-                      <span>{m.fullName}</span>
-                      {m.slug && <span style={{ fontSize:10, color:"#1a3a6e", opacity:0.6 }}>→</span>}
+
+                {loadingParty && !partyMembers && (
+                  <p style={{ color: "#aaa", fontSize: 12 }}>Chargement des membres…</p>
+                )}
+
+                {partyMembers !== null && (
+                  <>
+                    {partyMembers.filter(m => m.slug !== slug).length === 0 && !loadingParty && (
+                      <p style={{ color: "#aaa", fontSize: 12, fontStyle: "italic" }}>
+                        Aucun membre trouvé via l'API pour ce parti.
+                      </p>
+                    )}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {partyMembers.filter(m => m.slug !== slug).map((m, mi) => (
+                        <div key={mi}
+                          onClick={() => m.slug && onSelectSlug(m.slug)}
+                          style={{ display:"flex", alignItems:"center", gap:6,
+                            padding:"4px 10px", background:"#eef6ff", borderRadius:20,
+                            fontSize:12, border:`1px solid ${profile.currentParty?.color || "#1a3a6e"}44`,
+                            cursor: m.slug ? "pointer" : "default",
+                            transition: "border 0.15s, background 0.15s" }}
+                          onMouseEnter={(e) => { if (m.slug) { e.currentTarget.style.background="#ddeeff"; }}}
+                          onMouseLeave={(e) => { e.currentTarget.style.background="#eef6ff"; }}>
+                          {m.photoUrl && <img src={m.photoUrl} alt="" style={{ width:20, height:20, borderRadius:"50%", objectFit:"cover"}} />}
+                          <span>{m.fullName}</span>
+                          {m.slug && <span style={{ fontSize:10, color:"#1a3a6e", opacity:0.6 }}>→</span>}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+
+                    {partyMembers.length < partyTotal && !loadingParty && (
+                      <button
+                        onClick={() => fetchPartyMembers(profile.currentParty, partyPage + 1)}
+                        style={{ marginTop: 10, ...pgBtn, fontSize: 12 }}>
+                        Voir plus ({partyTotal - partyMembers.length} restants)
+                      </button>
+                    )}
+                    {loadingParty && <p style={{ color: "#aaa", fontSize: 12, marginTop: 6 }}>Chargement…</p>}
+                  </>
+                )}
               </div>
             )}
 

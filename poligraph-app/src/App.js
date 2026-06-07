@@ -1,9 +1,10 @@
 import { useState } from "react";
 import Navbar from "./components/Navbar";
 import HomePage from "./components/HomePage";
-import Dashboard from "./components/Dashboard";
+import ScandalsDashboard from "./components/ScandalsDashboard";
+import VotesDashboard from "./components/VotesDashboard";
+import FactchecksDashboard from "./components/FactchecksDashboard";
 import ExplorationPage from "./components/ExplorationPage";
-import ThemeAnalysis from "./components/ThemeAnalysis";
 import AnnuairePage from "./components/AnnuairePage";
 import JournalPage from "./components/JournalPage";
 import ChatWidget from "./components/ChatPage";
@@ -35,10 +36,11 @@ function App() {
         onBack={goBack}
       />
       <main className="main-content">
-        {page === "accueil"    && <HomePage onNavigate={navigate} />}
-        {page === "dashboard"  && <Dashboard onNavigate={navigate} />}
-        {page === "exploration"&& <ExplorationPage key={JSON.stringify(explorationFilters)} initialFilters={explorationFilters} />}
-        {page === "themes"     && <ThemeAnalysis />}
+        {page === "accueil"              && <HomePage onNavigate={navigate} />}
+        {page === "dashboard-scandales" && <ScandalsDashboard onNavigate={navigate} />}
+        {page === "dashboard-votes"     && <VotesDashboard onNavigate={navigate} />}
+        {page === "dashboard-factchecks"&& <FactchecksDashboard onNavigate={navigate} />}
+        {page === "exploration"         && <ExplorationPage key={JSON.stringify(explorationFilters)} initialFilters={explorationFilters} />}
         {page === "journal"    && <JournalPage />}
         {page === "annuaire"   && <AnnuairePage onNavigate={navigate} />}
       </main>

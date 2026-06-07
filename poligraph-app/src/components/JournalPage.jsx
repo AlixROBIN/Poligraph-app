@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { fetchJSON } from "../data/api";
 
 // ── Config sources ────────────────────────────────────────────────────────────
@@ -19,30 +19,9 @@ const SOURCES_CONFIG = {
     owner: "Google (Alphabet Inc.)", lean: "Agrégateur neutre", leanColor: "#7f8c8d" },
   "googlenews/parlement": { label: "Google News · Parl.",  type: "presse", color: "#4285F4", bg: "#e8f0fe",
     owner: "Google (Alphabet Inc.)", lean: "Agrégateur neutre", leanColor: "#7f8c8d" },
-  // ── Réseaux sociaux ─────────────────────────────────────────────────────
-  "reddit/r/france":      { label: "Reddit · r/france",   type: "social", color: "#FF4500", bg: "#fff3ee",
-    owner: "Communauté Reddit", lean: "Opinions citoyennes diverses", leanColor: "#7f8c8d" },
-  "reddit/r/politique":   { label: "Reddit · r/politique", type: "social", color: "#FF4500", bg: "#fff3ee",
-    owner: "Communauté Reddit", lean: "Opinions citoyennes diverses", leanColor: "#7f8c8d" },
-  "bluesky/politique":    { label: "Bluesky · Politique", type: "social", color: "#0085FF", bg: "#e8f4ff",
-    owner: "Bluesky Social PBC", lean: "Comptes politiques officiels", leanColor: "#7f8c8d" },
-  "bluesky/france":       { label: "Bluesky · France",    type: "social", color: "#0085FF", bg: "#e8f4ff",
-    owner: "Bluesky Social PBC", lean: "Opinions citoyennes diverses", leanColor: "#7f8c8d" },
-  "mastodon/politique":   { label: "Mastodon · Politique", type: "social", color: "#6364FF", bg: "#f0f0ff",
-    owner: "Réseau décentralisé Fediverse", lean: "Opinions citoyennes diverses", leanColor: "#7f8c8d" },
-  "mastodon/parlement":   { label: "Mastodon · Parlement", type: "social", color: "#6364FF", bg: "#f0f0ff",
-    owner: "Réseau décentralisé Fediverse", lean: "Comptes officiels parlement", leanColor: "#7f8c8d" },
-  "mastodon/france":      { label: "Mastodon · France",   type: "social", color: "#6364FF", bg: "#f0f0ff",
-    owner: "Réseau décentralisé Fediverse", lean: "Opinions citoyennes diverses", leanColor: "#7f8c8d" },
-  "x/politique":          { label: "X · Politique",       type: "social", color: "#14171A", bg: "#f7f7f7",
-    owner: "X Corp. (Elon Musk)", lean: "Comptes politiques officiels", leanColor: "#7f8c8d" },
-  "threads/politique":    { label: "Threads · Politique", type: "social", color: "#000000", bg: "#f5f5f5",
-    owner: "Meta Platforms (Mark Zuckerberg)", lean: "Comptes politiques officiels", leanColor: "#7f8c8d" },
-  "facebook/politique":   { label: "Facebook · Politique", type: "social", color: "#1877F2", bg: "#e7f0fd",
-    owner: "Meta Platforms (Mark Zuckerberg)", lean: "Pages politiques officielles", leanColor: "#7f8c8d" },
 };
 
-const TYPE_ICON = { presse: "📰", social: "💬" };
+const TYPE_ICON = { presse: "📰" };
 
 const SENTIMENT_CFG = {
   POSITIVE: {
@@ -66,15 +45,9 @@ const SENTIMENT_CFG = {
   UNKNOWN: { color: "#bbb", bg: "#f5f5f5", label: "–", sublabel: "", icon: "?", bar: "#eee" },
 };
 
-const PRESS_SOURCES  = [
+const PRESS_SOURCES = [
   "lemonde", "lefigaro", "liberation", "franceinfo", "lepoint",
   "googlenews/politique", "googlenews/parlement",
-];
-const SOCIAL_SOURCES = [
-  "reddit/r/france", "reddit/r/politique",
-  "bluesky/politique", "bluesky/france",
-  "mastodon/politique", "mastodon/parlement",
-  "x/politique", "threads/politique", "facebook/politique",
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -123,20 +96,28 @@ function SourceBadge({ source }) {
   );
 }
 
-function SentimentBadge({ label, score }) {
-  if (!label) return null;
+function SentimentBadge({ label, score, entities }) {
+  if (!label || label === "UNKNOWN") return null;
   const cfg = SENTIMENT_CFG[label] || SENTIMENT_CFG.NEUTRAL;
+  const subject = entities?.length > 0 ? entities[0] : null;
+  const tooltip = cfg.sublabel
+    + (subject ? `\n→ Sujet détecté : ${entities.slice(0, 3).join(", ")}` : "");
   return (
-    <span title={cfg.sublabel} style={{
+    <span title={tooltip} style={{
       display: "inline-flex", alignItems: "center", gap: 4,
       padding: "3px 8px", borderRadius: 12, fontSize: 11, fontWeight: 600,
-      background: cfg.bg, color: cfg.color, cursor: "help",
+      background: cfg.bg, color: cfg.color, cursor: "help", flexWrap: "nowrap",
     }}>
       <span style={{ fontWeight: 700, fontSize: 10 }}>{cfg.icon}</span>
       {cfg.label}
+      {subject && (
+        <span style={{ fontWeight: 400, opacity: 0.8, fontSize: 10 }}>
+          {" envers "}<em>{subject}</em>
+        </span>
+      )}
       {score != null && (
-        <span style={{ opacity: 0.7, fontWeight: 400 }}>
-          {score > 0 ? `+${score.toFixed(2)}` : score.toFixed(2)}
+        <span style={{ opacity: 0.6, fontWeight: 400, fontSize: 10 }}>
+          {score > 0 ? ` +${score.toFixed(2)}` : ` ${score.toFixed(2)}`}
         </span>
       )}
     </span>
@@ -200,7 +181,7 @@ function SentimentGauge({ label, score }) {
 
 function ArticleDrawer({ article, onClose }) {
   const cfg      = getSourceCfg(article.source);
-  const isSocial = cfg.type === "social";
+  const isSocial = false;
 
   // Fermer avec Échap
   useEffect(() => {
@@ -331,9 +312,24 @@ function ArticleDrawer({ article, onClose }) {
             border: "1px solid #e8ecf8",
           }}>
             <p style={{ ...sectionLabel, marginBottom: 12 }}>Analyse de sentiment</p>
-            {article.sentiment_label && article.sentiment_label !== "UNKNOWN" ? (
-              <SentimentGauge label={article.sentiment_label} score={article.sentiment} />
-            ) : (
+            {article.sentiment_label && article.sentiment_label !== "UNKNOWN" ? (() => {
+              const scfg = SENTIMENT_CFG[article.sentiment_label] || SENTIMENT_CFG.NEUTRAL;
+              return (
+                <>
+                  <p style={{ fontSize: 13, color: "#444", lineHeight: 1.7, margin: "0 0 12px" }}>
+                    Cet article exprime un{" "}
+                    <strong style={{ color: scfg.color }}>{scfg.label.toLowerCase()}</strong>
+                    {article.entities?.length > 0 && (
+                      <> envers{" "}
+                        <strong>{article.entities.slice(0, 3).join(", ")}</strong>
+                      </>
+                    )}.{" "}
+                    <span style={{ color: "#888", fontSize: 12 }}>{scfg.sublabel}.</span>
+                  </p>
+                  <SentimentGauge label={article.sentiment_label} score={article.sentiment} />
+                </>
+              );
+            })() : (
               <p style={{ fontSize: 12, color: "#bbb", margin: 0 }}>
                 {article.enriched
                   ? "Score non disponible pour cet article."
@@ -408,7 +404,7 @@ const sectionLabel = {
 
 function ArticleCard({ article, onOpen }) {
   const cfg      = getSourceCfg(article.source);
-  const isSocial = cfg.type === "social";
+  const isSocial = false;
 
   const handleClick = e => {
     // Ne pas ouvrir le drawer si on clique sur un lien externe
@@ -442,7 +438,7 @@ function ArticleCard({ article, onOpen }) {
         <div style={{ display: "flex", alignItems: "center", gap: 8,
           marginBottom: 10, flexWrap: "wrap" }}>
           <SourceBadge source={article.source} />
-          <SentimentBadge label={article.sentiment_label} score={article.sentiment} />
+          <SentimentBadge label={article.sentiment_label} score={article.sentiment} entities={article.entities} />
           {!article.enriched && (
             <span style={{ fontSize: 11, color: "#bbb", fontStyle: "italic" }}>non analysé</span>
           )}
@@ -516,39 +512,151 @@ function ArticleCard({ article, onOpen }) {
   );
 }
 
+// ── Multi-select dropdown ─────────────────────────────────────────────────────
+
+function CheckItem({ label, checked, onChange, color }) {
+  return (
+    <label style={{
+      display: "flex", alignItems: "center", gap: 8,
+      padding: "7px 14px", cursor: "pointer",
+      background: checked ? "#eef2ff" : "transparent",
+      transition: "background 0.1s",
+    }}
+    onMouseEnter={e => { if (!checked) e.currentTarget.style.background = "#f8f9fc"; }}
+    onMouseLeave={e => { if (!checked) e.currentTarget.style.background = "transparent"; }}
+    >
+      <input type="checkbox" checked={checked} onChange={onChange}
+        style={{ accentColor: color || "#1a3a6e", width: 14, height: 14 }} />
+      <span style={{ fontSize: 13, color: color || "#1a2e5a", fontWeight: checked ? 600 : 400 }}>
+        {label}
+      </span>
+    </label>
+  );
+}
+
+function MultiSelectDropdown({ label, selected, onToggle, onClear, groups, totalCount }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const count = selected.length;
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        display: "flex", alignItems: "center", gap: 8,
+        padding: "7px 12px", borderRadius: 8,
+        border: count > 0 ? "1px solid #1a3a6e" : "1px solid #d4ddf7",
+        background: count > 0 ? "#1a3a6e" : "#f8f9fc",
+        color: count > 0 ? "#fff" : "#1a2e5a",
+        cursor: "pointer", fontSize: 13, fontWeight: 600, minWidth: 130,
+      }}>
+        <span>{label}</span>
+        {count > 0 && (
+          <span style={{
+            background: "rgba(255,255,255,0.3)", borderRadius: 10,
+            padding: "1px 7px", fontSize: 11,
+          }}>{count}</span>
+        )}
+        {totalCount !== undefined && count === 0 && (
+          <span style={{ fontSize: 11, opacity: 0.6, marginLeft: "auto" }}>({totalCount})</span>
+        )}
+        <span style={{ marginLeft: "auto", fontSize: 10 }}>{open ? "▴" : "▾"}</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 200,
+          background: "#fff", borderRadius: 10,
+          boxShadow: "0 8px 28px rgba(0,0,0,0.14)",
+          border: "1px solid #e8ecf8",
+          minWidth: 220, maxHeight: 320, overflowY: "auto",
+          padding: "6px 0",
+        }}>
+          {count > 0 && (
+            <button onClick={() => { onClear(); setOpen(false); }} style={{
+              width: "100%", textAlign: "left", padding: "6px 14px",
+              background: "none", border: "none", borderBottom: "1px solid #f0f0f0",
+              color: "#e74c3c", fontSize: 12, fontWeight: 600, cursor: "pointer",
+              marginBottom: 4,
+            }}>
+              Tout désélectionner ✕
+            </button>
+          )}
+          {groups.map((g) => (
+            <div key={g.label}>
+              {g.label && (
+                <div style={{
+                  padding: "5px 14px 2px", fontSize: 10, fontWeight: 700,
+                  color: "#aaa", textTransform: "uppercase", letterSpacing: "0.5px",
+                  borderTop: "1px solid #f5f5f5", marginTop: 4,
+                }}>
+                  {g.label}
+                </div>
+              )}
+              {g.options.map((opt) => (
+                <CheckItem
+                  key={opt.value}
+                  label={opt.label}
+                  checked={selected.includes(opt.value)}
+                  color={opt.color}
+                  onChange={() => onToggle(opt.value)}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Page principale ───────────────────────────────────────────────────────────
 
 const JournalPage = () => {
-  const [articles, setArticles]             = useState([]);
+  const [allArticles, setAllArticles]       = useState([]);
   const [loading, setLoading]               = useState(true);
   const [wsStatus, setWsStatus]             = useState("connecting");
-  const [filterSource, setFilterSource]     = useState("");
-  const [filterType, setFilterType]         = useState("");
-  const [filterSentiment, setFilterSentiment] = useState("");
+  const [filterTypes, setFilterTypes]       = useState([]);
+  const [filterSources, setFilterSources]   = useState([]);
+  const [filterSentiments, setFilterSentiments] = useState([]);
   const [kafkaAvailable, setKafkaAvailable] = useState(false);
   const [enriched, setEnriched]             = useState(false);
-  const [, setSentimentFilterWarning] = useState(false);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const wsRef = useRef(null);
 
   const fetchArticles = useCallback(async () => {
     try {
-      const params = new URLSearchParams({ n: 100 });
-      if (filterSource)    params.append("source",    filterSource);
-      if (filterSentiment) params.append("sentiment", filterSentiment);
-      const data = await fetchJSON(`/api/journal?${params}`);
-      let arts = data.articles || [];
-      if (filterType) arts = arts.filter(a => getSourceCfg(a.source).type === filterType);
-      setArticles(arts);
+      const data = await fetchJSON(`/api/journal?n=100`);
+      setAllArticles(data.articles || []);
       setKafkaAvailable(data.kafka_available);
       setEnriched(data.enriched);
-      setSentimentFilterWarning(!!filterSentiment && !data.enriched);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, [filterSource, filterSentiment, filterType]);
+  }, []);
+
+  // Client-side filtering
+  const articles = useMemo(() => {
+    let arts = allArticles;
+    if (filterTypes.length > 0)
+      arts = arts.filter(a => filterTypes.includes(getSourceCfg(a.source).type));
+    if (filterSources.length > 0)
+      arts = arts.filter(a => filterSources.some(s => a.source?.startsWith(s) || a.source === s));
+    if (filterSentiments.length > 0)
+      arts = arts.filter(a => filterSentiments.includes(a.sentiment_label));
+    return arts;
+  }, [allArticles, filterTypes, filterSources, filterSentiments]);
+
+  const toggle = (setter) => (val) =>
+    setter(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
 
   useEffect(() => {
     fetchArticles();
@@ -589,8 +697,9 @@ const JournalPage = () => {
 
   const wsColor = { connected: "#2ecc71", connecting: "#f39c12", disconnected: "#e74c3c", error: "#e74c3c" }[wsStatus];
 
-  const presseCount = articles.filter(a => getSourceCfg(a.source).type === "presse").length;
-  const socialCount = articles.filter(a => getSourceCfg(a.source).type === "social").length;
+  const presseCount = allArticles.filter(a => getSourceCfg(a.source).type === "presse").length;
+  const socialCount = allArticles.filter(a => getSourceCfg(a.source).type === "social").length;
+  const hasFilters  = filterTypes.length > 0 || filterSources.length > 0 || filterSentiments.length > 0;
 
   return (
     <div style={{ padding: "1.5rem" }}>
@@ -643,55 +752,86 @@ const JournalPage = () => {
         <div style={{ flex: 1, background: "#ED2939" }} />
       </div>
 
-      {/* Filtres type */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-        {[
-          ["", `Tout (${articles.length})`],
-          ["presse", `📰 Presse (${presseCount})`],
-          ["social", `💬 Réseaux sociaux (${socialCount})`],
-        ].map(([val, lbl]) => (
-          <button key={val} onClick={() => setFilterType(val)}
-            style={{ ...fBtn, ...(filterType === val ? fActive : {}) }}>
-            {lbl}
-          </button>
-        ))}
-      </div>
-
-      {/* Filtres sources */}
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-        {[...PRESS_SOURCES, ...SOCIAL_SOURCES].map(s => {
-          const cfg    = getSourceCfg(s);
-          const active = filterSource === s;
-          return (
-            <button key={s} onClick={() => setFilterSource(active ? "" : s)}
-              style={{ ...fBtn, fontSize: 11,
-                background: active ? cfg.color : "#f5f5f5",
-                color: active ? "#fff" : cfg.color,
-                border: `1px solid ${cfg.color}44`,
-              }}>
-              {cfg.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Filtres sentiment */}
+      {/* Filtres multi-sélection */}
       <div style={{
-        display: "flex", gap: 6, flexWrap: "wrap",
-        marginBottom: enriched ? 6 : "1.2rem",
-        opacity: enriched ? 1 : 0.5,
-        pointerEvents: "auto",
+        display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center",
+        marginBottom: "1.2rem",
+        background: "#fff", borderRadius: 10, padding: "0.9rem 1.1rem",
+        border: "1px solid #e8ecf8", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
       }}>
-        {[["", "Tous sentiments"], ["POSITIVE", "Positif"], ["NEGATIVE", "Négatif"], ["NEUTRAL", "Neutre"]].map(([val, lbl]) => (
-          <button key={val} onClick={() => setFilterSentiment(val)}
-            style={{ ...fBtn, fontSize: 11,
-              background: filterSentiment === val
-                ? (SENTIMENT_CFG[val]?.color || "#1a3a6e") : "#f5f5f5",
-              color: filterSentiment === val ? "#fff" : "#555",
-            }}>
-            {lbl}
-          </button>
-        ))}
+        {/* Type */}
+        <MultiSelectDropdown
+          label="Type"
+          selected={filterTypes}
+          onToggle={toggle(setFilterTypes)}
+          onClear={() => setFilterTypes([])}
+          totalCount={allArticles.length}
+          groups={[{
+            label: null,
+            options: [
+              { value: "presse", label: `📰 Presse (${presseCount})` },
+              { value: "social", label: `💬 Réseaux sociaux (${socialCount})` },
+            ],
+          }]}
+        />
+
+        <div style={{ width: 1, height: 32, background: "#e8ecf8", flexShrink: 0 }} />
+
+        {/* Source */}
+        <MultiSelectDropdown
+          label="Source"
+          selected={filterSources}
+          onToggle={toggle(setFilterSources)}
+          onClear={() => setFilterSources([])}
+          groups={[
+            {
+              label: "Presse",
+              options: PRESS_SOURCES.map(s => ({
+                value: s,
+                label: getSourceCfg(s).label,
+                color: getSourceCfg(s).color,
+              })),
+            },
+          ]}
+        />
+
+        <div style={{ width: 1, height: 32, background: "#e8ecf8", flexShrink: 0 }} />
+
+        {/* Sentiment */}
+        <div style={{ opacity: enriched ? 1 : 0.55 }}>
+          <MultiSelectDropdown
+            label={enriched ? "Sentiment" : "Sentiment (Kafka requis)"}
+            selected={filterSentiments}
+            onToggle={toggle(setFilterSentiments)}
+            onClear={() => setFilterSentiments([])}
+            groups={[{
+              label: null,
+              options: [
+                { value: "POSITIVE", label: "↑ Ton favorable",  color: "#27ae60" },
+                { value: "NEGATIVE", label: "↓ Ton critique",   color: "#c0392b" },
+                { value: "NEUTRAL",  label: "= Équilibré",      color: "#7f8c8d" },
+              ],
+            }]}
+          />
+        </div>
+
+        {/* Résumé des filtres actifs + reset */}
+        {hasFilters && (
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 12, color: "#7a8aaa" }}>
+              {articles.length} résultat{articles.length !== 1 ? "s" : ""}
+            </span>
+            <button
+              onClick={() => { setFilterTypes([]); setFilterSources([]); setFilterSentiments([]); }}
+              style={{
+                padding: "6px 12px", background: "#fdecea",
+                border: "1px solid #e74c3c44", borderRadius: 6, cursor: "pointer",
+                fontSize: 12, fontWeight: 600, color: "#c0392b",
+              }}>
+              Réinitialiser ✕
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Liste articles */}
@@ -725,8 +865,5 @@ const JournalPage = () => {
   );
 };
 
-const fBtn    = { padding: "5px 12px", borderRadius: 20, border: "1px solid #d4ddf7",
-  cursor: "pointer", fontSize: 12, fontWeight: 600, background: "#f5f5f5", color: "#555" };
-const fActive = { background: "#1a3a6e", color: "#fff", border: "1px solid #1a3a6e" };
 
 export default JournalPage;

@@ -24,6 +24,17 @@ const BLOC = {
     cta: "Explorer les votes",
     tab: "votes",
   },
+  factchecks: {
+    id: "factchecks",
+    icon: "✓",
+    title: "Fact-checking",
+    color: "#8e44ad",
+    gradient: "linear-gradient(135deg, #6c3483 0%, #8e44ad 100%)",
+    desc: "817 déclarations de politiciens vérifiées par AFP Factuel, TF1 Info, Franceinfo, Le Monde…",
+    expl: "Qui dit vrai ? Qui dit faux ? Classement des politiciens et partis par fiabilité avec biais des sources.",
+    cta: "Voir les classements",
+    tab: "factchecks",
+  },
 };
 
 const BlocCard = ({ cfg, stats, onClick }) => {
@@ -151,49 +162,11 @@ export default function HomePage({ onNavigate }) {
         </p>
         <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
           <BlocCard cfg={BLOC.scandales} stats={sc}
-            onClick={() => onNavigate("exploration", { tab: "scandales" })} />
+            onClick={() => onNavigate("dashboard-scandales")} />
           <BlocCard cfg={BLOC.votes} stats={vt}
-            onClick={() => onNavigate("exploration", { tab: "votes" })} />
-        </div>
-
-        {/* Autres sections */}
-        <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem", flexWrap: "wrap" }}>
-          {[
-            {
-              icon: "👤", label: "Annuaire des élus", sub: "Profils, mandats, parcours",
-              page: "annuaire",
-            },
-            {
-              icon: "📰", label: "Journal en direct", sub: "Presse + réseaux sociaux filtrés",
-              page: "journal",
-            },
-            {
-              icon: "📊", label: "Statistiques", sub: "Graphiques et tendances",
-              page: "dashboard",
-            },
-          ].map((item) => (
-            <div key={item.page}
-              onClick={() => onNavigate(item.page)}
-              style={{
-                flex: 1, minWidth: 160, cursor: "pointer", borderRadius: 10,
-                background: "#fff", padding: "1rem", textAlign: "center",
-                boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-                border: "1px solid #e8ecf8",
-                transition: "box-shadow 0.15s, transform 0.1s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.12)";
-                e.currentTarget.style.transform = "translateY(-2px)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.08)";
-                e.currentTarget.style.transform = "translateY(0)";
-              }}>
-              <div style={{ fontSize: 28, marginBottom: 6 }}>{item.icon}</div>
-              <div style={{ fontWeight: 700, fontSize: 13, color: "#1a2e5a" }}>{item.label}</div>
-              <div style={{ fontSize: 11, color: "#999", marginTop: 3 }}>{item.sub}</div>
-            </div>
-          ))}
+            onClick={() => onNavigate("dashboard-votes")} />
+          <BlocCard cfg={BLOC.factchecks} stats={null}
+            onClick={() => onNavigate("dashboard-factchecks")} />
         </div>
 
         {/* Explication pour novices */}

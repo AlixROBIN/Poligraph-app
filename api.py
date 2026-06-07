@@ -4,12 +4,15 @@ API FastAPI — données Analytics + prédictions ML
 
 import ast
 import asyncio
+import hashlib
 import json
 import os
 import pickle
 import re
 import sys
+import time
 import warnings
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Optional
@@ -266,8 +269,8 @@ def api_data(limit: int = 100, offset: int = 0):
 @app.get("/api/search/filters")
 def search_filters():
     """Valeurs disponibles pour les menus déroulants."""
-    sc = pd.read_csv(ANALYTICS_DIR / "scandales_features.csv", low_memory=False)
-    vt = pd.read_csv(ANALYTICS_DIR / "votes_features.csv",     low_memory=False)
+    sc = _df_scandales if _df_scandales is not None else pd.DataFrame()
+    vt = _df_votes     if _df_votes     is not None else pd.DataFrame()
     return {
         "categories": sorted(sc["category"].dropna().unique().tolist()),
         "partis":     sorted(sc["party_short"].dropna().unique().tolist()),
@@ -287,13 +290,13 @@ def search_scandales(
     limit:      int  = 20,
     offset:     int  = 0,
 ):
-    sc = pd.read_csv(ANALYTICS_DIR / "scandales_features.csv", low_memory=False)
+    sc = (_df_scandales if _df_scandales is not None else pd.read_csv(ANALYTICS_DIR / "scandales_features.csv", low_memory=False))
 
     if q:
         mask = (
-            sc["title"].fillna("").str.contains(q, case=False, na=False) |
-            sc["description"].fillna("").str.contains(q, case=False, na=False) |
-            sc["politician_name"].fillna("").str.contains(q, case=False, na=False)
+            sc["title"].fillna("").str.contains(q, case=False, na=False, regex=False) |
+            sc["description"].fillna("").str.contains(q, case=False, na=False, regex=False) |
+            sc["politician_name"].fillna("").str.contains(q, case=False, na=False, regex=False)
         )
         sc = sc[mask]
     if category:
@@ -321,20 +324,29 @@ def search_votes(
     q:       str = "",
     result:  str = "",
     annee:   int = 0,
+    theme:   str = "",
     limit:   int = 20,
     offset:  int = 0,
 ):
-    vt = pd.read_csv(ANALYTICS_DIR / "votes_features.csv", low_memory=False)
+    vt = (_df_votes if _df_votes is not None else pd.read_csv(ANALYTICS_DIR / "votes_features.csv", low_memory=False))
 
     if q:
-        vt = vt[vt["title"].fillna("").str.contains(q, case=False, na=False)]
+        vt = vt[vt["title"].fillna("").str.contains(q, case=False, na=False, regex=False)]
+    if theme:
+        vt["_theme"] = vt["title"].apply(_vote_theme)
+        vt = vt[vt["_theme"] == theme]
     if result:
         vt = vt[vt["result"] == result]
     if annee > 0:
         vt = vt[pd.to_numeric(vt["annee_vote"], errors="coerce").fillna(0) == annee]
 
+    # Priorité aux lignes avec externalId (données de groupe disponibles)
+    if "externalId" in vt.columns:
+        has_ext = vt["externalId"].notna() & (vt["externalId"].astype(str).str.strip() != "")
+        vt = pd.concat([vt[has_ext], vt[~has_ext]]).reset_index(drop=True)
+
     total = len(vt)
-    cols  = ["title", "result", "annee_vote", "legislature",
+    cols  = ["externalId", "title", "result", "annee_vote", "legislature",
              "votesFor", "votesAgainst", "votesAbstain", "totalVotes", "sourceUrl"]
     cols  = [c for c in cols if c in vt.columns]
     page  = vt[cols].iloc[offset: offset + limit].fillna("").to_dict(orient="records")
@@ -405,7 +417,7 @@ def clean_parti_keys(d: dict) -> dict:
 
 @app.get("/api/dashboard/scandales")
 def dashboard_scandales():
-    sc = pd.read_csv(ANALYTICS_DIR / "scandales_features.csv", low_memory=False)
+    sc = _df_scandales if _df_scandales is not None else pd.DataFrame()
     par_annee = (
         sc["annee_faits"].dropna()
         .pipe(lambda s: pd.to_numeric(s, errors="coerce").dropna())
@@ -421,9 +433,41 @@ def dashboard_scandales():
     }
 
 
+import unicodedata as _ud
+
+def _strip_accents(s: str) -> str:
+    return "".join(c for c in _ud.normalize("NFD", s) if _ud.category(c) != "Mn")
+
+# Keywords en minuscules sans accents pour matcher les titres double-encodés de l'API
+_VOTE_THEMES = {
+    "Agriculture":         ["agriculture", "agricol", "alimentation", "peche", "souverainete agricole"],
+    "Social & Santé":      ["social", "sante", "maladie", "travail", "emploi", "chomage", "retraite", "famille"],
+    "Économie & Budget":   ["budget", "financ", "fiscal", "impot", "taxe", "plf", "plfss", "economi", "recette", "depense"],
+    "Sécurité & Justice":  ["justice", "securite", "police", "penal", "crime", "gendarmerie", "fraude", "judiciaire"],
+    "Environnement":       ["environnement", "ecologi", "climat", "biodiversite", "energie", "nucleaire", "transition"],
+    "Europe & Intl.":      ["europe", "europeen", "traite", "international", "convention", "accord"],
+    "Éducation & Culture": ["education", "ecole", "universite", "enseignement", "culture", "formation"],
+    "Défense":             ["defense", "armee", "militaire", "renseignement"],
+    "Institutions":        ["constitution", "organique", "referendum", "election", "parlement", "assemblee"],
+}
+
+def _vote_theme(title: str) -> str:
+    if not isinstance(title, str):
+        return "Autres"
+    tl = _strip_accents(title.lower())
+    for theme, kws in _VOTE_THEMES.items():
+        if any(k in tl for k in kws):
+            return theme
+    return "Autres"
+
+
 @app.get("/api/dashboard/votes")
 def dashboard_votes():
-    vt = pd.read_csv(ANALYTICS_DIR / "votes_features.csv", low_memory=False)
+    vt = (_df_votes if _df_votes is not None else pd.read_csv(ANALYTICS_DIR / "votes_features.csv", low_memory=False)).copy()
+    for col in ["votesFor", "votesAgainst", "votesAbstain", "totalVotes"]:
+        if col in vt.columns:
+            vt[col] = pd.to_numeric(vt[col], errors="coerce").fillna(0)
+
     resultats = vt["result"].value_counts().to_dict()
     par_annee = (
         vt["annee_vote"].dropna()
@@ -431,14 +475,46 @@ def dashboard_votes():
         .astype(int).astype(str)
         .value_counts().sort_index().to_dict()
     )
+
+    # Thèmes
+    vt["_theme"] = vt["title"].apply(_vote_theme)
+    par_theme = {}
+    for theme, grp in vt.groupby("_theme"):
+        n = len(grp)
+        adopted = int((grp["result"] == "ADOPTED").sum())
+        par_theme[theme] = {
+            "total":    n,
+            "adopted":  adopted,
+            "rejected": int((grp["result"] == "REJECTED").sum()),
+            "taux":     round(adopted / n * 100, 1) if n > 0 else 0,
+        }
+
+    # Marges
+    if "marge" in vt.columns:
+        marge_abs = vt["marge"].abs()
+    else:
+        marge_abs = (vt["votesFor"] - vt["votesAgainst"]).abs()
+
+    serres_df     = vt[marge_abs <= 20]
+    equilibres_df = vt[(marge_abs > 20) & (marge_abs < 100)]
+    decisifs_df   = vt[marge_abs >= 100]
+
     return {
         "total":     len(vt),
         "resultats": resultats,
         "par_annee": par_annee,
-        "moyenne_pour":    round(float(pd.to_numeric(vt["votesFor"], errors="coerce").mean() or 0), 1),
-        "moyenne_contre":  round(float(pd.to_numeric(vt["votesAgainst"], errors="coerce").mean() or 0), 1),
-        "moyenne_abstain": round(float(pd.to_numeric(vt["votesAbstain"], errors="coerce").mean() or 0), 1),
+        "par_theme": par_theme,
+        "votes_serres":      int((marge_abs <= 20).sum()),
+        "votes_equilibres":  int(((marge_abs > 20) & (marge_abs < 100)).sum()),
+        "votes_decisifs":    int((marge_abs >= 100).sum()),
+        "themes_serres":     serres_df["_theme"].value_counts().head(5).to_dict(),
+        "themes_equilibres": equilibres_df["_theme"].value_counts().head(5).to_dict(),
+        "themes_decisifs":   decisifs_df["_theme"].value_counts().head(5).to_dict(),
+        "moyenne_pour":    round(float(vt["votesFor"].mean()    or 0), 1),
+        "moyenne_contre":  round(float(vt["votesAgainst"].mean() or 0), 1),
+        "moyenne_abstain": round(float(vt["votesAbstain"].mean() or 0), 1),
     }
+
 
 
 @app.get("/api/dashboard/partis")
@@ -559,15 +635,27 @@ def predict_politician(req: PoliticianRequest):
 POLIGRAPH_BASE = "https://poligraph.fr/api"
 PROXY_HEADERS  = {"User-Agent": "PoliGraphApp/1.0"}
 
+# Cache TTL pour les appels proxy (évite les doubles aller-retours réseau)
+_pg_cache: dict = {}   # key → {"data": ..., "at": float}
+_PG_TTL = 600          # 10 minutes
 
-def _pg(path: str, params: dict = None):
-    """Appel générique vers l'API Poligraph avec gestion d'erreur."""
+def _pg(path: str, params: dict = None, cache: bool = True):
+    """Appel générique vers l'API Poligraph avec cache TTL optionnel."""
+    cache_key = (path, tuple(sorted((params or {}).items())))
+    if cache:
+        entry = _pg_cache.get(cache_key)
+        if entry and time.time() - entry["at"] < _PG_TTL:
+            return entry["data"]
+
     r = http_requests.get(f"{POLIGRAPH_BASE}/{path}", params=params,
                           headers=PROXY_HEADERS, timeout=15)
     if r.status_code == 404:
         raise HTTPException(status_code=404, detail="Ressource introuvable")
     r.raise_for_status()
-    return r.json()
+    data = r.json()
+    if cache:
+        _pg_cache[cache_key] = {"data": data, "at": time.time()}
+    return data
 
 
 @app.get("/api/proxy/politiques")
@@ -609,20 +697,331 @@ def proxy_partis_detail(slug: str):
 
 
 @app.get("/api/proxy/partis/{slug}/membres")
-def proxy_partis_membres(slug: str, limit: int = 24, page: int = 1):
-    try:
-        return _pg(f"partis/{slug}/membres", {"limit": limit, "page": page})
-    except Exception:
+def proxy_partis_membres(slug: str, limit: int = 50, page: int = 1):
+    """
+    Membres d'un parti — depuis nos données locales (elus_features.csv).
+    Le slug peut être le shortName (ex: 'RN') ou le nom complet slug (ex: 'rassemblement-national').
+    """
+    el = _df_elus
+    if el is None or el.empty:
         return {"data": [], "pagination": {"total": 0, "page": 1, "totalPages": 1}}
+
+    # Normalise le slug : shortName (RN) ou slug-name (rassemblement-national → RN via mapping)
+    slug_upper = slug.upper()
+    # Essai 1 : match direct sur party_short
+    subset = el[el["party_short"].str.upper() == slug_upper]
+    # Essai 2 : match sur party_name slug-ified
+    if subset.empty and "party_name" in el.columns:
+        subset = el[el["party_name"].fillna("").str.lower().str.replace(r"[^a-z0-9]+", "-", regex=True) == slug.lower()]
+
+    subset = subset.dropna(subset=["slug"])
+    total  = len(subset)
+    offset = (page - 1) * limit
+    page_df = subset.iloc[offset: offset + limit]
+
+    records = page_df[["slug", "fullName", "firstName", "lastName", "photoUrl", "party_short", "party_name"]].fillna("").to_dict("records")
+    data = [
+        {
+            "slug":      r["slug"],
+            "fullName":  r["fullName"],
+            "firstName": r["firstName"],
+            "lastName":  r["lastName"],
+            "photoUrl":  r["photoUrl"] or None,
+            "party":     {"shortName": r["party_short"], "name": r["party_name"]},
+        }
+        for r in records
+    ]
+
+    return {
+        "data": data,
+        "pagination": {
+            "total":      total,
+            "page":       page,
+            "limit":      limit,
+            "totalPages": max(1, -(-total // limit)),
+        },
+    }
+
+
+# ── Fact-checks ───────────────────────────────────────────────────────────────
+
+@app.get("/api/proxy/factchecks")
+def proxy_factchecks(q: str = "", verdictRating: str = "", source: str = "",
+                     limit: int = 20, page: int = 1):
+    """Fact-checks depuis poligraph.fr (817 vérifications). Cache 10 min."""
+    params: dict = {"limit": limit, "page": page}
+    if q:             params["search"] = q
+    if verdictRating: params["verdictRating"] = verdictRating
+    if source:        params["source"] = source
+    return _pg("factchecks", params)
+
+
+@app.get("/api/proxy/politiques/{slug}/factchecks")
+def proxy_politiques_factchecks(slug: str, limit: int = 20, page: int = 1):
+    """Fact-checks d'un politicien donné."""
+    return _pg(f"politiques/{slug}/factchecks", {"limit": limit, "page": page})
+
+
+
+@app.get("/api/dashboard/factchecks")
+def dashboard_factchecks():
+    """
+    Agrège tous les fact-checks (817) depuis poligraph.fr.
+    Cache 30 minutes — calcule classements politiciens, partis, verdicts, sources.
+    """
+    cache_key = ("dashboard_fc", "v1")
+    entry = _pg_cache.get(cache_key)
+    if entry and time.time() - entry["at"] < 1800:
+        return entry["data"]
+
+    # Récupère toutes les pages
+    all_fc = []
+    page = 1
+    while True:
+        try:
+            d = _pg("factchecks", {"limit": 100, "page": page}, cache=False)
+            batch = d.get("data") or []
+            if not batch:
+                break
+            all_fc.extend(batch)
+            if len(all_fc) >= (d.get("pagination") or {}).get("total", 0):
+                break
+            page += 1
+            if page > 15:
+                break
+        except Exception:
+            break
+
+    # Groupes de verdicts
+    TRUE_GROUP  = {"TRUE", "MOSTLY_TRUE"}
+    MID_GROUP   = {"HALF_TRUE", "MISLEADING"}
+    FALSE_GROUP = {"FALSE", "MOSTLY_FALSE"}
+    UNK_GROUP   = {"UNVERIFIABLE"}
+
+    def score(fc_list):
+        total = len(fc_list)
+        if total == 0:
+            return None
+        t = sum(1 for f in fc_list if f.get("verdictRating") in TRUE_GROUP)
+        m = sum(1 for f in fc_list if f.get("verdictRating") in MID_GROUP)
+        fa = sum(1 for f in fc_list if f.get("verdictRating") in FALSE_GROUP)
+        u = sum(1 for f in fc_list if f.get("verdictRating") in UNK_GROUP)
+        return {
+            "total":    total,
+            "vrai":     t,  "pct_vrai":  round(t  / total * 100),
+            "trompeur": m,  "pct_trompeur": round(m / total * 100),
+            "faux":     fa, "pct_faux":  round(fa / total * 100),
+            "invefi":   u,  "pct_invefi": round(u / total * 100),
+        }
+
+    # ── Agrégation par politicien ─────────────────────────────────────────
+    by_pol: dict = {}
+    for fc in all_fc:
+        pols = fc.get("politicians") or []
+        if isinstance(pols, str):
+            import ast as _ast
+            try: pols = _ast.literal_eval(pols)
+            except: pols = []
+        for p in pols:
+            slug = p.get("slug") or ""
+            if not slug:
+                continue
+            if slug not in by_pol:
+                by_pol[slug] = {"name": p.get("fullName", slug), "party": (p.get("currentParty") or {}).get("shortName", ""), "fc": []}
+            by_pol[slug]["fc"].append(fc)
+    pol_scores = [{"slug": s, "name": d["name"], "party": d["party"], **score(d["fc"])}
+                  for s, d in by_pol.items() if len(d["fc"]) >= 5]
+    most_reliable  = sorted(pol_scores, key=lambda x: -x["pct_vrai"])[:10]
+    least_reliable = sorted(pol_scores, key=lambda x: -x["pct_faux"])[:10]
+
+    # ── Agrégation par parti ──────────────────────────────────────────────
+    by_party: dict = {}
+    for fc in all_fc:
+        pols = fc.get("politicians") or []
+        if isinstance(pols, str):
+            import ast as _ast
+            try: pols = _ast.literal_eval(pols)
+            except: pols = []
+        for p in pols:
+            party = (p.get("currentParty") or {}).get("shortName") or ""
+            if not party:
+                continue
+            if party not in by_party:
+                by_party[party] = {"name": (p.get("currentParty") or {}).get("name", party), "color": (p.get("currentParty") or {}).get("color", "#999"), "fc": []}
+            by_party[party]["fc"].append(fc)
+    party_scores = [{"short": s, "name": d["name"], "color": d["color"], **score(d["fc"])}
+                    for s, d in by_party.items() if len(d["fc"]) >= 5]
+    most_reliable_p  = sorted(party_scores, key=lambda x: -x["pct_vrai"])[:8]
+    least_reliable_p = sorted(party_scores, key=lambda x: -x["pct_faux"])[:8]
+
+    # ── Verdicts globaux ──────────────────────────────────────────────────
+    overall = score(all_fc)
+
+    # ── Par source ────────────────────────────────────────────────────────
+    from collections import Counter
+    src_counts = Counter(fc.get("source", "?") for fc in all_fc)
+
+    result = {
+        "total":             len(all_fc),
+        "verdicts_globaux":  overall,
+        "sources":           [{"name": s, "count": c} for s, c in src_counts.most_common(10)],
+        "most_reliable":     most_reliable,
+        "least_reliable":    least_reliable,
+        "most_reliable_p":   most_reliable_p,
+        "least_reliable_p":  least_reliable_p,
+    }
+    _pg_cache[cache_key] = {"data": result, "at": time.time()}
+    return result
 
 
 @app.get("/api/proxy/scrutins/{scrutin_ref}/groupes")
 def proxy_scrutin_groupes(scrutin_ref: str):
-    """Détail du vote par groupe parlementaire pour un scrutin donné."""
+    """
+    Répartition des votes par groupe parlementaire pour un scrutin.
+    Scrappe la page HTML de l'Assemblée nationale (seule source disponible).
+    scrutin_ref : externalId complet (ex: VTANR5L17V7162) ou URL source.
+    """
+    # Extraire legislature et numéro depuis externalId (ex: VTANR5L17V7162)
+    m = re.match(r"VTANR5L(\d+)V(\d+)", scrutin_ref)
+    if not m:
+        return {"groupes": []}
+    legislature, numero = m.group(1), m.group(2)
+
+    url = f"https://www.assemblee-nationale.fr/dyn/{legislature}/scrutins/{numero}"
+    cache_key = ("an_groupes", scrutin_ref)
+    entry = _pg_cache.get(cache_key)
+    if entry and time.time() - entry["at"] < _PG_TTL:
+        return entry["data"]
+
     try:
-        return _pg(f"scrutins/{scrutin_ref}/groupes")
+        r = http_requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=12)
+        r.raise_for_status()
+        html = r.content.decode("iso-8859-1")
     except Exception:
         return {"groupes": []}
+
+    groupes = []
+    for block in re.split(r'data-organe-id="PO\d+"', html)[1:]:
+        name_m   = re.search(r'title="Acc[^"]+(?:groupe|group)\s+([^"]{5,80})"', block, re.IGNORECASE)
+        pour_m   = re.search(r"Pour\s*:\s*(\d+)",         block)
+        contre_m = re.search(r"Contre\s*:\s*(\d+)",       block)
+        abs_m    = re.search(r"Abstention\s*:\s*(\d+)",   block)
+        nv_m     = re.search(r"Non\s*votant\s*:\s*(\d+)", block)
+        color_m  = re.search(r"color:\s*(#[0-9a-fA-F]{6})", block)
+        if not (pour_m or contre_m):
+            continue
+        import html as _html
+        name = _html.unescape(name_m.group(1).strip()) if name_m else "?"
+        pour = int(pour_m.group(1)) if pour_m else 0
+        contre = int(contre_m.group(1)) if contre_m else 0
+        abstention = int(abs_m.group(1)) if abs_m else 0
+        nonVotant  = int(nv_m.group(1))  if nv_m  else 0
+        total = pour + contre + abstention + nonVotant
+        groupes.append({
+            "name":        name,
+            "shortName":   name[:6],
+            "pour":        pour,
+            "contre":      contre,
+            "abstention":  abstention,
+            "nonVotant":   nonVotant,
+            "total":       total,
+            "taux_pour":   round(pour / total * 100, 1) if total > 0 else 0,
+            "color":       color_m.group(1) if color_m else "#999",
+        })
+
+    data = {"groupes": groupes}
+    _pg_cache[cache_key] = {"data": data, "at": time.time()}
+    return data
+
+
+# ── Matrice parti × thème ──────────────────────────────────────────────────────
+# Un représentant par parti → votes récents → classification thématique → matrice
+_PARTY_REPS = {
+    # RN — 3 élus pour couvrir Environnement + Éducation
+    "marine-le-pen":        ("RN",    "Rassemblement National",  "#0D378A"),
+    "jean-philippe-tanguy": ("RN",    "Rassemblement National",  "#0D378A"),
+    # LFI
+    "manuel-bompard":       ("LFI",   "La France insoumise",     "#C5294B"),
+    "mathilde-panot":       ("LFI",   "La France insoumise",     "#C5294B"),
+    # RE — 3 élus pour couvrir Environnement + Éducation
+    "gabriel-attal":        ("RE",    "Renaissance",             "#EF7B21"),
+    "jean-rene-cazeneuve":  ("RE",    "Renaissance",             "#EF7B21"),
+    "benjamin-haddad":      ("RE",    "Renaissance",             "#EF7B21"),
+    # MoDem — marc-fesneau très actif (Agri/Env/Edu)
+    "jean-paul-mattei":     ("MoDem", "Mouvement démocrate",     "#0066CC"),
+    "marc-fesneau":         ("MoDem", "Mouvement démocrate",     "#0066CC"),
+    # EELV
+    "cyrielle-chatelain":   ("EELV",  "Les Écologistes",         "#2DA84A"),
+    "sandra-regol":         ("EELV",  "Les Écologistes",         "#2DA84A"),
+    # PS
+    "olivier-faure":        ("PS",    "Parti socialiste",        "#E75480"),
+    "boris-vallaud":        ("PS",    "Parti socialiste",        "#E75480"),
+    # HOR
+    "laurent-marcangeli":   ("HOR",   "Horizons",                "#00B5D8"),
+    "frederic-valletoux":   ("HOR",   "Horizons",                "#00B5D8"),
+    # LR
+    "annie-genevard":       ("LR",    "Les Républicains",        "#003189"),
+}
+
+@app.get("/api/proxy/party-matrix")
+def proxy_party_matrix(limit: int = 100):
+    """
+    Matrice parti × thème législatif.
+    Pour chaque parti, agrège les votes (pour/contre/abstention) par thème
+    à partir des positions individuelles d'un élu représentatif.
+    """
+    pages = max(1, min(limit // 100, 10))  # 1 page per 100 votes, cap 10 pages
+
+    def fetch_votes_for(slug: str):
+        all_votes = []
+        try:
+            for page in range(1, pages + 1):
+                d = _pg(f"politiques/{slug}/votes", {"limit": 100, "page": page})
+                batch = d.get("votes") or []
+                all_votes.extend(batch)
+                if len(batch) < 100:
+                    break
+        except Exception:
+            pass
+        return {"votes": all_votes}
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        futures = {slug: pool.submit(fetch_votes_for, slug) for slug in _PARTY_REPS}
+        results = {slug: fut.result() for slug, fut in futures.items()}
+
+    # Agrégation par parti (plusieurs représentants → mêmes compteurs)
+    party_themes: dict = {}  # short → {theme → {pour, contre, abstention}}
+    party_meta:   dict = {}  # short → (name, color)
+
+    for slug, data in results.items():
+        short, name, color = _PARTY_REPS[slug]
+        party_meta[short] = (name, color)
+        if short not in party_themes:
+            party_themes[short] = {}
+
+        for v in (data.get("votes") or []):
+            sc    = v.get("scrutin") or {}
+            theme = _vote_theme(sc.get("title") or "")
+            pos   = (v.get("position") or "").upper()
+            if theme not in party_themes[short]:
+                party_themes[short][theme] = {"pour": 0, "contre": 0, "abstention": 0}
+            if pos == "POUR":
+                party_themes[short][theme]["pour"] += 1
+            elif pos == "CONTRE":
+                party_themes[short][theme]["contre"] += 1
+            elif pos in ("ABSTENTION", "ABSTAIN"):
+                party_themes[short][theme]["abstention"] += 1
+
+    matrix: dict = {}
+    for short, themes_agg in party_themes.items():
+        name, color = party_meta[short]
+        for counts in themes_agg.values():
+            tot = counts["pour"] + counts["contre"] + counts["abstention"]
+            counts["total"]   = tot
+            counts["pctPour"] = round(counts["pour"] / tot * 100, 1) if tot > 0 else None
+        matrix[short] = {"name": name, "color": color, "themes": themes_agg}
+
+    return matrix
 
 
 # ============================================================
@@ -639,19 +1038,6 @@ SOURCE_LABELS = {
     # Google News
     "googlenews/politique": "Google News · Politique",
     "googlenews/parlement": "Google News · Parlement",
-    # Réseaux sociaux — API ouvertes
-    "reddit/r/france":      "Reddit · r/france",
-    "reddit/r/politique":   "Reddit · r/politique",
-    "bluesky/politique":    "Bluesky · Politique",
-    "bluesky/france":       "Bluesky · France",
-    "mastodon/politique":   "Mastodon · #politique",
-    "mastodon/parlement":   "Mastodon · #parlement",
-    # X (Nitter RSS — aucun token requis)
-    "x/politique":          "X · Politique",
-    # Threads (RSSHub public)
-    "threads/politique":    "Threads · Politique",
-    # Facebook (facebook-scraper, pages publiques)
-    "facebook/politique":   "Facebook · Politique",
 }
 
 RSS_FEEDS = [
@@ -668,76 +1054,8 @@ GOOGLE_NEWS_QUERIES = [
     ("googlenews/parlement", "assemblée+nationale+sénat"),
 ]
 
-REDDIT_SUBS = [
-    ("reddit/r/france",    "france"),
-    ("reddit/r/politique", "politique"),
-]
-
-BLUESKY_QUERIES = [
-    ("bluesky/politique", "politique france"),
-    ("bluesky/france",    "assemblée nationale"),
-]
-
-# Mastodon — instances françaises, API publique sans authentification
-MASTODON_TAGS = [
-    ("mastodon/politique", "piaille.fr", "politique"),
-    ("mastodon/parlement", "piaille.fr", "parlement"),
-]
-
-# Nitter — frontend Twitter open source, accès RSS sans token
-NITTER_INSTANCES = [
-    "nitter.poast.org",
-    "nitter.privacydev.net",
-    "nitter.cz",
-    "nitter.d420.de",
-]
-NITTER_ACCOUNTS = [
-    "gouvernementFR",
-    "AssembleeNat",
-    "senat",
-    "Elysee_FR",
-    "jlmelenchon",
-    "MLP_officiel",
-    "fxbellamy",
-    "olivierfaure",
-]
-
-THREADS_HANDLES = [
-    "gouvernement.fr",
-    "elysee",
-    "assemblee_nationale",
-]
-
-FACEBOOK_PAGES = [
-    "rassemblementnational",
-    "LaFranceInsoumise",
-]
 
 _RSS_UA = "PoliGraph/1.0 (github.com/AlixROBIN/Poligraph-app; contact: alixanniv@gmail.com)"
-
-# Mots-clés de politique française — filtre les contenus hors-sujet des réseaux sociaux
-_FR_POLITICS_KW = frozenset({
-    "france", "français", "française", "francais", "francaise",
-    "macron", "premier", "ministre", "gouvernement",
-    "assemblée", "assemblee", "sénat", "senat", "parlement",
-    "député", "depute", "sénateur", "senateur",
-    "élection", "election", "vote", "loi", "décret", "decret",
-    "rn", "lfi", "ps", "lr",
-    "mélenchon", "melenchon", "le pen", "bardella", "attal", "weil", "bayrou",
-    "rassemblement", "insoumise", "socialiste", "republicains", "renaissance",
-    "président", "president", "élysée", "elysee", "matignon",
-    "immigration", "retraite", "budget", "grève", "greve", "manifestation",
-    "fiscal", "impôt", "impot", "chomage", "chômage",
-    "dissolution", "censure", "cohabitation", "legislatif", "legislatives",
-    "zemmour", "faure", "jadot", "glucksmann", "hayer", "retailleau",
-})
-
-
-def _is_french_politics(title: str, summary: str = "") -> bool:
-    """Filtre rapide : renvoie True si le contenu traite de politique française."""
-    text = (title + " " + summary).lower()
-    words = set(re.findall(r'\b\w+\b', text))
-    return bool(words & _FR_POLITICS_KW)
 
 
 # Cache RSS — évite de re-scraper à chaque requête
@@ -791,339 +1109,32 @@ def _strip_html(text: str) -> str:
     return re.sub(r"\s+", " ", s.get_data()).strip()
 
 
-_REDDIT_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-)
-
-
-def _fetch_reddit(source_key: str, subreddit: str) -> list[dict]:
-    """Reddit via JSON API avec UA navigateur (évite le blocage bot)."""
-    import hashlib, requests as _r
-    from datetime import datetime, timezone
-    try:
-        url  = f"https://www.reddit.com/r/{subreddit}/hot.json?limit=25"
-        resp = _r.get(url, headers={"User-Agent": _REDDIT_UA}, timeout=15)
-        if resp.status_code == 429:
-            logger.info(f"[Reddit] {source_key}: rate-limited, passage ignoré")
-            _metric_err(source_key)
-            return []
-        resp.raise_for_status()
-        children = resp.json()["data"]["children"]
-        articles = []
-        for child in children:
-            p = child["data"]
-            if p.get("stickied") or not p.get("title"):
-                continue
-            link  = f"https://reddit.com{p['permalink']}"
-            title = _strip_html(p["title"])
-            body  = _strip_html(p.get("selftext", "") or p.get("url", ""))[:800]
-            if not _is_french_politics(title, body):
-                continue
-            articles.append({
-                "id":              hashlib.sha256(link.encode()).hexdigest()[:16],
-                "title":           title,
-                "summary":         body,
-                "source":          source_key,
-                "source_label":    SOURCE_LABELS.get(source_key, source_key),
-                "url":             link,
-                "published_at":    datetime.fromtimestamp(
-                                       p["created_utc"], tz=timezone.utc
-                                   ).isoformat(),
-                "sentiment":       None,
-                "sentiment_label": None,
-                "entities":        [],
-                "keywords":        [],
-                "enriched":        False,
-                "score":           p.get("score", 0),
-                "comments":        p.get("num_comments", 0),
-            })
-        _metric_ok(source_key, len(articles))
-        logger.info(f"[Reddit] {source_key}: {len(articles)} posts")
-        return articles
-    except Exception as exc:
-        _metric_err(source_key)
-        logger.warning(f"[Reddit] {source_key} : {exc}")
-        return []
-
-
-def _fetch_bluesky(source_key: str, query: str) -> list[dict]:
-    """Posts Bluesky via API publique (sans authentification)."""
-    import hashlib, requests as _r
-    try:
-        resp = _r.get(
-            "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts",
-            params={"q": query, "limit": 25, "sort": "latest"},
-            headers={"User-Agent": _RSS_UA, "Accept": "application/json"},
-            timeout=15,
-        )
-        if resp.status_code == 429:
-            logger.info(f"[Bluesky] {source_key}: rate-limited")
-            _metric_err(source_key)
-            return []
-        resp.raise_for_status()
-        posts = resp.json().get("posts", [])
-        articles = []
-        for post in posts:
-            record  = post.get("record", {})
-            text    = record.get("text", "")
-            if not _is_french_politics(text):
-                continue
-            uri     = post.get("uri", "")
-            author  = post.get("author", {})
-            handle  = author.get("handle", "")
-            rkey    = uri.split("/")[-1] if "/" in uri else uri
-            url_post = f"https://bsky.app/profile/{handle}/post/{rkey}"
-            articles.append({
-                "id":              hashlib.sha256(uri.encode()).hexdigest()[:16],
-                "title":           text[:120],
-                "summary":         text[:800],
-                "source":          source_key,
-                "source_label":    SOURCE_LABELS.get(source_key, source_key),
-                "url":             url_post,
-                "published_at":    record.get("createdAt", ""),
-                "sentiment":       None,
-                "sentiment_label": None,
-                "entities":        [],
-                "keywords":        [],
-                "enriched":        False,
-            })
-        _metric_ok(source_key, len(articles))
-        logger.info(f"[Bluesky] {source_key}: {len(articles)} posts")
-        return articles
-    except Exception as exc:
-        _metric_err(source_key)
-        logger.warning(f"[Bluesky] {source_key} : {exc}")
-        return []
 
 
 def _fetch_google_news(source_key: str, query: str) -> list[dict]:
-    """Google News RSS — agrège les articles les plus partagés sur les réseaux sociaux."""
-    import hashlib, requests as _r
+    url = f"https://news.google.com/rss/search?q={query}&hl=fr&gl=FR&ceid=FR:fr"
     try:
-        url  = f"https://news.google.com/rss/search?q={query}&hl=fr&gl=FR&ceid=FR:fr"
         feed = _fetch_feed(url)
-        articles = []
-        for entry in feed.entries[:20]:
+        batch = []
+        for entry in feed.entries[:15]:
             link = entry.get("link") or entry.get("id") or ""
-            articles.append({
+            batch.append({
                 "id":              hashlib.sha256(link.encode()).hexdigest()[:16],
                 "title":           _strip_html(entry.get("title", "")),
-                "summary":         _strip_html(entry.get("summary", "") or "")[:800],
+                "summary":         _strip_html(entry.get("summary", "") or "")[:600],
                 "source":          source_key,
                 "source_label":    SOURCE_LABELS.get(source_key, source_key),
                 "url":             link,
                 "published_at":    entry.get("published", ""),
-                "sentiment":       None,
-                "sentiment_label": None,
-                "entities":        [],
-                "keywords":        [],
-                "enriched":        False,
+                "sentiment":       None, "sentiment_label": None,
+                "entities":        [], "keywords":          [], "enriched": False,
             })
-        _metric_ok(source_key, len(articles))
-        logger.info(f"[Google News] {source_key}: {len(articles)} articles")
-        return articles
+        _metric_ok(source_key, len(batch))
+        return batch
     except Exception as exc:
         _metric_err(source_key)
-        logger.warning(f"[Google News] {source_key} : {exc}")
+        logger.debug(f"[Google News] {source_key} : {exc}")
         return []
-
-
-def _fetch_mastodon(source_key: str, instance: str, hashtag: str) -> list[dict]:
-    """
-    Mastodon public timeline par hashtag — API publique, sans authentification.
-    Instances françaises actives : piaille.fr (communauté fr), mastodon.social.
-    """
-    import hashlib, requests as _r
-    try:
-        url  = f"https://{instance}/api/v1/timelines/tag/{hashtag}?limit=20"
-        resp = _r.get(url, headers={"User-Agent": _RSS_UA}, timeout=15)
-        resp.raise_for_status()
-        posts = resp.json()
-        articles = []
-        for post in posts:
-            content  = _strip_html(post.get("content", ""))
-            url_post = post.get("url", "")
-            account  = post.get("account", {})
-            display  = account.get("display_name") or account.get("username", "")
-            if len(content) < 20:
-                continue
-            if not _is_french_politics(content):
-                continue
-            articles.append({
-                "id":              hashlib.sha256(url_post.encode()).hexdigest()[:16],
-                "title":           f"{display}: {content[:100]}",
-                "summary":         content[:800],
-                "source":          source_key,
-                "source_label":    SOURCE_LABELS.get(source_key, source_key),
-                "url":             url_post,
-                "published_at":    post.get("created_at", ""),
-                "sentiment":       None,
-                "sentiment_label": None,
-                "entities":        [],
-                "keywords":        [],
-                "enriched":        False,
-            })
-        _metric_ok(source_key, len(articles))
-        logger.info(f"[Mastodon] {source_key} (@{instance}): {len(articles)} posts")
-        return articles
-    except Exception as exc:
-        _metric_err(source_key)
-        logger.warning(f"[Mastodon] {source_key} : {exc}")
-        return []
-
-
-def _fetch_x(source_key: str) -> list[dict]:
-    """
-    X (Twitter) — essaie Nitter RSS en priorité (aucun token), puis API officielle
-    si X_BEARER_TOKEN est défini. Cible les comptes officiels de représentants politiques.
-    """
-    token = os.getenv("X_BEARER_TOKEN")
-    if token:
-        import hashlib, requests as _r
-        try:
-            resp = _r.get(
-                "https://api.twitter.com/2/tweets/search/recent",
-                params={
-                    "query":        "politique france lang:fr -is:retweet",
-                    "max_results":  20,
-                    "tweet.fields": "created_at,text",
-                },
-                headers={"Authorization": f"Bearer {token}", "User-Agent": _RSS_UA},
-                timeout=15,
-            )
-            resp.raise_for_status()
-            tweets = resp.json().get("data", [])
-            articles = []
-            for tw in tweets:
-                text = tw.get("text", "")
-                tid  = tw.get("id", "")
-                if not _is_french_politics(text):
-                    continue
-                articles.append({
-                    "id":              hashlib.sha256(tid.encode()).hexdigest()[:16],
-                    "title":           text[:120],
-                    "summary":         text[:800],
-                    "source":          source_key,
-                    "source_label":    SOURCE_LABELS.get(source_key, source_key),
-                    "url":             f"https://x.com/i/web/status/{tid}",
-                    "published_at":    tw.get("created_at", ""),
-                    "sentiment":       None, "sentiment_label": None,
-                    "entities":        [], "keywords":         [], "enriched": False,
-                })
-            _metric_ok(source_key, len(articles))
-            logger.info(f"[X/API] {source_key}: {len(articles)} tweets")
-            return articles
-        except Exception as exc:
-            logger.warning(f"[X/API] : {exc} → fallback Nitter")
-
-    # Nitter RSS — comptes officiels de représentants politiques (aucun token requis)
-    import hashlib
-    articles = []
-    for account in NITTER_ACCOUNTS:
-        fetched = False
-        for instance in NITTER_INSTANCES:
-            try:
-                feed = _fetch_feed(f"https://{instance}/{account}/rss")
-                if not feed.entries:
-                    continue
-                for entry in feed.entries[:4]:
-                    link    = entry.get("link", "") or entry.get("id", "")
-                    title   = _strip_html(entry.get("title", ""))
-                    summary = _strip_html(entry.get("summary", "") or "")
-                    if not _is_french_politics(title, summary):
-                        continue
-                    articles.append({
-                        "id":              hashlib.sha256(link.encode()).hexdigest()[:16],
-                        "title":           title[:120],
-                        "summary":         summary[:800],
-                        "source":          source_key,
-                        "source_label":    SOURCE_LABELS.get(source_key, source_key),
-                        "url":             link,
-                        "published_at":    entry.get("published", ""),
-                        "sentiment":       None, "sentiment_label": None,
-                        "entities":        [], "keywords":         [], "enriched": False,
-                    })
-                fetched = True
-                break
-            except Exception:
-                continue
-        if not fetched:
-            logger.debug(f"[X/Nitter] Aucune instance disponible pour @{account}")
-
-    _metric_ok(source_key, len(articles)) if articles else _metric_err(source_key)
-    logger.info(f"[X/Nitter] {source_key}: {len(articles)} tweets")
-    return articles
-
-
-def _fetch_threads(source_key: str, handles: list[str]) -> list[dict]:
-    """
-    Threads — via RSSHub public (rsshub.app).
-    Cible les comptes officiels de représentants et institutions politiques.
-    """
-    import hashlib
-    articles = []
-    for handle in handles:
-        try:
-            feed = _fetch_feed(f"https://rsshub.app/threads/user/{handle}")
-            for entry in feed.entries[:8]:
-                link    = entry.get("link", "") or entry.get("id", "")
-                title   = _strip_html(entry.get("title", ""))
-                summary = _strip_html(entry.get("summary", "") or "")
-                if not _is_french_politics(title, summary):
-                    continue
-                articles.append({
-                    "id":              hashlib.sha256(link.encode()).hexdigest()[:16],
-                    "title":           title[:120],
-                    "summary":         summary[:800],
-                    "source":          source_key,
-                    "source_label":    SOURCE_LABELS.get(source_key, source_key),
-                    "url":             link,
-                    "published_at":    entry.get("published", ""),
-                    "sentiment":       None, "sentiment_label": None,
-                    "entities":        [], "keywords":         [], "enriched": False,
-                })
-        except Exception as exc:
-            logger.debug(f"[Threads] {handle}: {exc}")
-    _metric_ok(source_key, len(articles)) if articles else _metric_err(source_key)
-    logger.info(f"[Threads] {source_key}: {len(articles)} posts")
-    return articles
-
-
-def _fetch_facebook(source_key: str, pages: list[str]) -> list[dict]:
-    """
-    Facebook — pages publiques de partis politiques via facebook-scraper.
-    Nécessite : pip install facebook-scraper  (optionnel, désactivé si absent).
-    """
-    try:
-        from facebook_scraper import get_posts
-    except ImportError:
-        return []
-    import hashlib
-    articles = []
-    for page in pages:
-        try:
-            for post in get_posts(page, pages=1, timeout=15):
-                text = post.get("text", "") or post.get("post_text", "") or ""
-                if not text or not _is_french_politics(text):
-                    continue
-                link = post.get("post_url", "") or ""
-                articles.append({
-                    "id":              hashlib.sha256(link.encode()).hexdigest()[:16],
-                    "title":           text[:120],
-                    "summary":         text[:800],
-                    "source":          source_key,
-                    "source_label":    SOURCE_LABELS.get(source_key, source_key),
-                    "url":             link,
-                    "published_at":    str(post.get("time", "")),
-                    "sentiment":       None, "sentiment_label": None,
-                    "entities":        [], "keywords":         [], "enriched": False,
-                })
-        except Exception as exc:
-            logger.debug(f"[Facebook] {page}: {exc}")
-    _metric_ok(source_key, len(articles)) if articles else _metric_err(source_key)
-    logger.info(f"[Facebook] {source_key}: {len(articles)} posts")
-    return articles
 
 
 def _enrich_with_sentiment(articles: list[dict]) -> list[dict]:
@@ -1133,7 +1144,7 @@ def _enrich_with_sentiment(articles: list[dict]) -> list[dict]:
         return articles
     try:
         sys.path.insert(0, str(ROOT_DIR / "pipeline"))
-        from sentiment_utils import score_texts_with_labels
+        from sentiment_utils import score_texts_with_labels  # type: ignore[import]
         texts = [articles[i]["title"] + " " + articles[i].get("summary", "") for i in to_score]
         scored = score_texts_with_labels(texts)
         for idx, result in zip(to_score, scored):
@@ -1146,16 +1157,13 @@ def _enrich_with_sentiment(articles: list[dict]) -> list[dict]:
 
 
 def _scrape_rss_cached() -> list[dict]:
-    import hashlib, time
     from datetime import datetime, timezone
     now = time.time()
     if now - _rss_cache["fetched_at"] < _RSS_TTL and _rss_cache["articles"]:
         return _rss_cache["articles"]
 
-    articles = []
-
-    # ── 1. Presse RSS ──────────────────────────────────────────
-    for source, url in RSS_FEEDS:
+    # ── Tâches à paralléliser ──────────────────────────────────
+    def fetch_rss(source, url):
         try:
             feed = _fetch_feed(url)
             batch = []
@@ -1169,42 +1177,28 @@ def _scrape_rss_cached() -> list[dict]:
                     "source_label":    SOURCE_LABELS.get(source, source),
                     "url":             link,
                     "published_at":    entry.get("published", datetime.now(timezone.utc).isoformat()),
-                    "sentiment":       None,
-                    "sentiment_label": None,
-                    "entities":        [],
-                    "keywords":        [],
-                    "enriched":        False,
+                    "sentiment":       None, "sentiment_label": None,
+                    "entities":        [], "keywords":          [], "enriched": False,
                 })
-            articles.extend(batch)
             _metric_ok(source, len(batch))
+            return batch
         except Exception as exc:
             _metric_err(source)
             logger.debug(f"RSS {source} : {exc}")
+            return []
 
-    # ── 2. Google News RSS ─────────────────────────────────────
-    for source_key, query in GOOGLE_NEWS_QUERIES:
-        articles.extend(_fetch_google_news(source_key, query))
+    tasks = []
+    tasks += [(fetch_rss,          (src, url)) for src, url in RSS_FEEDS]
+    tasks += [(_fetch_google_news, (sk, q))    for sk, q   in GOOGLE_NEWS_QUERIES]
 
-    # ── 3. Reddit JSON API ─────────────────────────────────────
-    for source_key, subreddit in REDDIT_SUBS:
-        articles.extend(_fetch_reddit(source_key, subreddit))
-
-    # ── 4. Bluesky ─────────────────────────────────────────────
-    for source_key, query in BLUESKY_QUERIES:
-        articles.extend(_fetch_bluesky(source_key, query))
-
-    # ── 5. Mastodon (API publique, comptes politiques) ────────
-    for source_key, instance, tag in MASTODON_TAGS:
-        articles.extend(_fetch_mastodon(source_key, instance, tag))
-
-    # ── 6. X (Nitter RSS ou API officielle) ───────────────────
-    articles.extend(_fetch_x("x/politique"))
-
-    # ── 7. Threads (RSSHub, comptes officiels) ────────────────
-    articles.extend(_fetch_threads("threads/politique", THREADS_HANDLES))
-
-    # ── 8. Facebook (pages publiques partis) ──────────────────
-    articles.extend(_fetch_facebook("facebook/politique", FACEBOOK_PAGES))
+    articles = []
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        futures = [pool.submit(fn, *args) for fn, args in tasks]
+        for fut in as_completed(futures):
+            try:
+                articles.extend(fut.result() or [])
+            except Exception:
+                pass
 
     # ── Déduplication par URL ──────────────────────────────────
     seen = set()
@@ -1328,7 +1322,7 @@ async def websocket_stream(websocket: WebSocket):
             articles = _feature_consumer.latest(20) if _feature_consumer else []
             await websocket.send_json({"articles": articles})
             await asyncio.sleep(2)
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, Exception):
         pass
 
 
@@ -1548,19 +1542,39 @@ AGENT_TOOLS = [
         "function": {
             "name": "search_scandales",
             "description": (
-                "Recherche des scandales politiques dans la base de données PoliGraph. "
-                "Utilise cet outil pour trouver des affaires par texte libre, catégorie, parti, statut ou période."
+                "Cherche des scandales politiques dans la base (258 affaires). "
+                "Utilise parti= avec le code exact (RN/LR/LFI/RE/PS). "
+                "NE combine JAMAIS parti= et q= avec la même valeur."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "q":        {"type": "string",  "description": "Texte libre (titre, description, nom du politicien)"},
-                    "category": {"type": "string",  "description": "Catégorie ex: CORRUPTION, FRAUDE_FISCALE, FINANCEMENT_ILLEGAL"},
-                    "parti":    {"type": "string",  "description": "Parti politique ex: RN, LFI, PS, LREM, LR"},
-                    "statut":   {"type": "string",  "description": "Statut judiciaire ex: CONDAMNE, ACQUITTE, ENQUETE_PRELIMINAIRE"},
-                    "annee_min":{"type": "integer", "description": "Année minimale des faits"},
-                    "annee_max":{"type": "integer", "description": "Année maximale des faits"},
-                    "limit":    {"type": "integer", "description": "Nombre de résultats (défaut 10, max 30)"},
+                    "q":        {"type": "string", "description": "Texte libre dans titre/description/nom du politicien"},
+                    "category": {
+                        "type": "string",
+                        "enum": ["DETOURNEMENT_FONDS_PUBLICS", "DIFFAMATION", "INCITATION_HAINE",
+                                 "VIOLENCE", "PRISE_ILLEGALE_INTERETS", "EMPLOI_FICTIF",
+                                 "HARCELEMENT_MORAL", "INJURE", "FINANCEMENT_ILLEGAL_CAMPAGNE",
+                                 "FAVORITISME", "ABUS_CONFIANCE", "AGRESSION_SEXUELLE",
+                                 "CORRUPTION", "ABUS_BIENS_SOCIAUX", "FRAUDE_FISCALE", "AUTRE"],
+                        "description": "Catégorie exacte de l'affaire",
+                    },
+                    "parti": {
+                        "type": "string",
+                        "enum": ["RN", "LR", "LFI", "RE", "PS", "EELV", "HOR", "MoDem", "NFP", "FN", "NI", "REC"],
+                        "description": "Code du parti — utilise le code exact",
+                    },
+                    "statut": {
+                        "type": "string",
+                        "enum": ["CONDAMNATION_DEFINITIVE", "ENQUETE_PRELIMINAIRE",
+                                 "CLASSEMENT_SANS_SUITE", "APPEL_EN_COURS", "RELAXE",
+                                 "CONDAMNATION_PREMIERE_INSTANCE", "INSTRUCTION",
+                                 "RENVOI_TRIBUNAL", "NON_LIEU", "MISE_EN_EXAMEN", "PROCES_EN_COURS"],
+                        "description": "Statut judiciaire exact",
+                    },
+                    "annee_min": {"type": "integer", "description": "Année minimale des faits"},
+                    "annee_max": {"type": "integer", "description": "Année maximale des faits"},
+                    "limit":     {"type": "integer", "description": "Nombre de résultats (défaut 10, max 30)"},
                 },
                 "required": [],
             },
@@ -1570,17 +1584,14 @@ AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "search_votes",
-            "description": (
-                "Recherche des votes parlementaires dans la base de données. "
-                "Utilise pour trouver des lois, résultats de votes, taux d'adoption."
-            ),
+            "description": "Cherche parmi 9 871 votes parlementaires (2017-2026). Utilise q= pour chercher dans le titre.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "q":      {"type": "string",  "description": "Texte de recherche sur le titre du vote/loi"},
-                    "result": {"type": "string",  "description": "Résultat: ADOPTED ou REJECTED"},
-                    "annee":  {"type": "integer", "description": "Année du vote"},
-                    "limit":  {"type": "integer", "description": "Nombre de résultats (défaut 10)"},
+                    "q":      {"type": "string",  "description": "Mots-clés dans le titre du vote/loi"},
+                    "result": {"type": "string",  "enum": ["ADOPTED", "REJECTED"], "description": "Résultat du vote"},
+                    "annee":  {"type": "integer", "description": "Année du vote (2017-2026)"},
+                    "limit":  {"type": "integer", "description": "Nombre de résultats (défaut 10, max 30)"},
                 },
                 "required": [],
             },
@@ -1590,15 +1601,22 @@ AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_statistics",
-            "description": "Obtenir des statistiques agrégées sur les scandales, votes, partis ou élus.",
+            "description": (
+                "Statistiques agrégées. Pour 'scandales' : retourne les comptages par catégorie, parti, statut. "
+                "Avec parti= : retourne la répartition par catégorie POUR ce parti spécifiquement."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "type": {
                         "type": "string",
                         "enum": ["scandales", "votes", "partis", "elus"],
-                        "description": "Type de statistiques à récupérer",
-                    }
+                        "description": "Type de statistiques",
+                    },
+                    "parti": {
+                        "type": "string",
+                        "description": "Filtrer les stats scandales pour un parti spécifique (ex: RN, LR)",
+                    },
                 },
                 "required": ["type"],
             },
@@ -1608,14 +1626,11 @@ AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_recent_articles",
-            "description": (
-                "Récupérer les articles de presse récents sur la politique française. "
-                "Sources : Le Monde, Le Figaro, Libération, France Info, Le Point, Reddit."
-            ),
+            "description": "Articles de presse récents (Le Monde, Le Figaro, Libération, France Info, Le Point, Google News).",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "q":     {"type": "string",  "description": "Mots-clés pour filtrer par titre ou résumé"},
+                    "q":     {"type": "string",  "description": "Mots-clés dans le titre ou résumé"},
                     "limit": {"type": "integer", "description": "Nombre d'articles (défaut 8, max 20)"},
                 },
                 "required": [],
@@ -1667,9 +1682,9 @@ def _tool_search_scandales(q="", category="", parti="", statut="",
         sc = sc.copy()
         if q:
             mask = (
-                sc["title"].fillna("").str.contains(q, case=False, na=False) |
-                sc["description"].fillna("").str.contains(q, case=False, na=False) |
-                sc["politician_name"].fillna("").str.contains(q, case=False, na=False)
+                sc["title"].fillna("").str.contains(q, case=False, na=False, regex=False) |
+                sc["description"].fillna("").str.contains(q, case=False, na=False, regex=False) |
+                sc["politician_name"].fillna("").str.contains(q, case=False, na=False, regex=False)
             )
             sc = sc[mask]
         if category:
@@ -1697,7 +1712,7 @@ def _tool_search_votes(q="", result="", annee=0, limit=10):
         vt = _df_votes if _df_votes is not None else pd.read_csv(ANALYTICS_DIR / "votes_features.csv", low_memory=False)
         vt = vt.copy()
         if q:
-            vt = vt[vt["title"].fillna("").str.contains(q, case=False, na=False)]
+            vt = vt[vt["title"].fillna("").str.contains(q, case=False, na=False, regex=False)]
         if result:
             vt = vt[vt["result"] == result]
         if annee > 0:
@@ -1711,18 +1726,20 @@ def _tool_search_votes(q="", result="", annee=0, limit=10):
         return {"erreur": str(e), "résultats": []}
 
 
-def _tool_get_statistics(type: str):
+def _tool_get_statistics(type: str, parti: str = ""):
     try:
         sc = _df_scandales if _df_scandales is not None else pd.DataFrame()
         vt = _df_votes     if _df_votes     is not None else pd.DataFrame()
         el = _df_elus      if _df_elus      is not None else pd.DataFrame()
 
         if type == "scandales":
+            sc_f = sc[sc["party_short"] == parti.upper()] if parti and "party_short" in sc.columns else sc
             return {
-                "total": len(sc),
-                "par_catégorie": sc["category"].value_counts().head(10).to_dict() if "category" in sc.columns else {},
-                "par_parti":     sc["party_short"].value_counts().head(10).to_dict() if "party_short" in sc.columns else {},
-                "par_statut":    sc["status"].value_counts().to_dict() if "status" in sc.columns else {},
+                "total":         len(sc_f),
+                "filtre_parti":  parti.upper() if parti else "tous",
+                "par_catégorie": sc_f["category"].value_counts().head(10).to_dict() if "category" in sc_f.columns else {},
+                "par_parti":     sc_f["party_short"].value_counts().head(10).to_dict() if not parti and "party_short" in sc_f.columns else {},
+                "par_statut":    sc_f["status"].value_counts().to_dict() if "status" in sc_f.columns else {},
             }
         if type == "votes":
             return {
@@ -1924,39 +1941,69 @@ def _execute_agent_tool(tool_name: str, tool_input: dict) -> dict:
         return {"erreur": f"Paramètres invalides pour {tool_name} : {e}"}
 
 
-_AGENT_SYSTEM = """Tu es PoliBot, un agent d'analyse politique française doté de plusieurs sources de données.
+_AGENT_SYSTEM = """Tu es PoliBot, un assistant d'analyse de la vie politique française. Tu réponds UNIQUEMENT à des questions sur la politique française.
 
-## Tes sources de données
-- **Base de données** : scandales politiques, votes parlementaires, profils d'élus français
-- **Presse vérifiée** : Le Monde, Le Figaro, Libération, France Info, Le Point, Google News
-- **Réseaux sociaux** : comptes officiels de représentants politiques (X, Reddit, Mastodon, Bluesky)
+## ⛔ PÉRIMÈTRE STRICT
+Tu n'es autorisé à traiter QUE les sujets suivants :
+- Élus et personnalités politiques françaises
+- Votes et lois à l'Assemblée nationale / Sénat
+- Scandales et affaires judiciaires impliquant des politiques français
+- Partis politiques français
+- Actualité politique française récente (presse)
 
-## Règle fondamentale : toujours croiser les sources
-Pour toute question sur un personnage politique ou une situation :
-1. Utilise **analyze_political_figure** EN PREMIER — il croise automatiquement presse + DB + profil
-2. Complète si besoin avec **search_scandales** ou **search_votes**
-3. Formule une analyse argumentée en combinant les deux
+Si la question porte sur autre chose (recettes, sport, tech, géographie, histoire mondiale, etc.), réponds exactement :
+"Je suis limité à l'analyse politique française. Je ne peux pas répondre à cette question."
 
-## Utilisation correcte de search_scandales
-- COMMENCE par `get_statistics("scandales")` pour voir les partis, catégories et statuts disponibles dans la base
-- Le filtre `q` cherche dans le texte (titre, description, nom du politicien)
-- Le filtre `parti` cherche par code parti (RN, LFI, PS, LR, LREM…) — NE PAS combiner `q` et `parti` avec la même valeur
-- Le filtre `statut` accepte des valeurs partielles (ex: "CONDAMN" trouve "CONDAMNÉ", "CONDAMNATION"…)
-- Le filtre `category` accepte des valeurs partielles (ex: "CORRUPT" trouve "CORRUPTION"…)
-- Pour les scandales d'un parti : `parti="RN"` SANS `q` → résultats corrects
-- Les filtres sont insensibles à la casse et aux accents
+## 📊 Données disponibles (connais ces chiffres)
+- **Scandales** : 258 affaires | Partis les plus représentés : RN (58), LR (39), LFI (29), RE (16), PS (11)
+- **Votes** : 9 871 scrutins | 3 601 adoptés (36,5%) · 6 270 rejetés
+- **Élus** : 35 095 profils dans la base
 
-## Comment analyser
-- Si la presse parle d'un sujet ET que la DB contient des données connexes → croise-les explicitement
-- Cite les sources (nom du journal, date si disponible)
-- Tu peux **spéculer** si les données le permettent, avec des formules claires :
-  "D'après les données…", "Mon analyse :", "Il est probable que…"
-- Ne dis JAMAIS "je n'ai pas d'information" sans avoir utilisé analyze_political_figure
+### Catégories de scandales exactes (à utiliser telles quelles dans category=)
+DETOURNEMENT_FONDS_PUBLICS · DIFFAMATION · INCITATION_HAINE · VIOLENCE · PRISE_ILLEGALE_INTERETS · EMPLOI_FICTIF · HARCELEMENT_MORAL · INJURE · FINANCEMENT_ILLEGAL_CAMPAGNE · FAVORITISME · ABUS_CONFIANCE · AGRESSION_SEXUELLE · CORRUPTION · ABUS_BIENS_SOCIAUX · FRAUDE_FISCALE · AUTRE
 
-## Format de réponse
-- Toujours en français
-- Structure : [données factuelles] → [croisement presse × DB] → [analyse argumentée]
-- Mentionne le sentiment médiatique quand disponible (positif/négatif/neutre)"""
+### Statuts judiciaires exacts (à utiliser dans statut=)
+CONDAMNATION_DEFINITIVE · ENQUETE_PRELIMINAIRE · CLASSEMENT_SANS_SUITE · APPEL_EN_COURS · RELAXE · CONDAMNATION_PREMIERE_INSTANCE · INSTRUCTION · RENVOI_TRIBUNAL · NON_LIEU · MISE_EN_EXAMEN · PROCES_EN_COURS
+
+### Codes partis exacts (à utiliser dans parti=)
+RN · LR · LFI · RE · PS · EELV · HOR · MoDem · NFP · UDI · PCF
+
+## 🔧 Règles d'utilisation des outils
+
+**Pour une question sur un politicien :**
+→ Appelle `analyze_political_figure(name="Prénom Nom")` EN PREMIER. Ne réponds jamais sans l'avoir appelé.
+
+**Pour les scandales d'un parti :**
+→ `search_scandales(parti="RN", limit=20)` — utilise le code exact (RN, pas "Rassemblement National")
+→ NE combine JAMAIS `parti` et `q` avec la même valeur
+
+**Pour les stats croisées (ex: "dans quelle catégorie RN est le plus représenté") :**
+→ `get_statistics(type="scandales", parti="RN")`
+
+**Pour des votes sur un thème :**
+→ `search_votes(q="budget", limit=10)` ou `search_votes(q="agriculture")`
+
+## 📰 Utilisation du sentiment médiatique (OBLIGATOIRE quand disponible)
+
+Quand `analyze_political_figure` retourne des données de presse :
+- **`tonalité_médiatique`** : indique si la couverture récente est favorable ou critique
+- **`sentiment_moyen`** : score numérique (-1 à +1), positif = favorable, négatif = critique
+- **`mots_clés_dominants`** : les mots les plus fréquents dans les articles récents
+
+**Comment les utiliser dans ta réponse :**
+1. Cite la tonalité : "La presse couvre ce personnage avec un ton [POSITIF/NÉGATIF/NEUTRE]…"
+2. Croise avec les affaires : "Malgré X affaires en base, le ton médiatique reste [Y], ce qui suggère…"
+3. Cite les mots-clés dominants pour expliquer les sujets couverts : "Les articles récents portent surtout sur : [mots-clés]"
+4. Si un article est NEGATIVE mais la DB montre une relaxe → signale la contradiction
+
+**Quand la presse ne parle pas d'un sujet** : dis-le explicitement ("Aucun article récent disponible — l'analyse se base uniquement sur la base de données")
+
+## ✅ Format de réponse
+- Toujours en français, toujours factuel
+- Structure : **[Données DB]** → **[Tonalité médiatique + articles]** → **[Analyse croisée + conclusion]**
+- Ex : "D'après la base : 5 affaires pour X (dont 2 condamnations définitives). La presse le couvre avec un ton négatif (score: -0.3), les articles mentionnent surtout : fraude, détournement. Cette convergence DB×presse indique une exposition judiciaire et médiatique forte."
+- Indique clairement si une donnée est absente
+- Sois précis et concis — pas de rembourrage"""
 
 _GROQ_MODEL   = os.getenv("GROQ_MODEL",   "llama-3.1-8b-instant")   # 500k TPD vs 100k pour 70b
 _OLLAMA_URL   = os.getenv("OLLAMA_URL",   "http://localhost:11434")
