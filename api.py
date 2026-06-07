@@ -461,6 +461,51 @@ def _vote_theme(title: str) -> str:
     return "Autres"
 
 
+_THEME_LIST = list(_VOTE_THEMES.keys()) + ["Autres"]
+
+def _vote_theme_llm(title: str) -> str:
+    """Classification sémantique via Ollama ; fallback keyword si Ollama indispo ou inutile."""
+    kw = _vote_theme(title)
+    if kw != "Autres":
+        return kw  # keywords suffisent → pas d'appel LLM
+    if not title or len(title) < 8:
+        return "Autres"
+    themes_str = " | ".join(_THEME_LIST)
+    prompt = (
+        f"Classe ce titre de vote parlementaire français dans UN SEUL thème parmi : {themes_str}\n"
+        f"Titre : « {title[:200]} »\n"
+        f"Réponds uniquement par le nom exact du thème, rien d'autre."
+    )
+    result = _ollama_simple(prompt, max_tokens=15, cache_key="theme:" + title[:80])
+    for t in _THEME_LIST:
+        if t.lower() in result.lower():
+            return t
+    return "Autres"
+
+
+def _ollama_sentiment(text: str) -> tuple[float, str]:
+    """Sentiment d'un texte politique via Ollama. Retourne (score ∈ [-1,1], label)."""
+    prompt = (
+        f"Analyse le sentiment de cet article de presse politique français.\n"
+        f"Texte : « {text[:500]} »\n"
+        f'Réponds uniquement en JSON : {{"score": float entre -1.0 et 1.0, "label": "POSITIVE" ou "NEGATIVE" ou "NEUTRAL"}}'
+    )
+    result = _ollama_simple(prompt, max_tokens=60, cache_key="sent:" + text[:80])
+    if result:
+        m = re.search(r'\{[^}]+\}', result)
+        if m:
+            try:
+                d = json.loads(m.group())
+                score = float(d.get("score", 0.0))
+                label = str(d.get("label", "NEUTRAL")).upper()
+                if label not in ("POSITIVE", "NEGATIVE", "NEUTRAL"):
+                    label = "NEUTRAL"
+                return round(max(-1.0, min(1.0, score)), 4), label
+            except Exception:
+                pass
+    return 0.0, "UNKNOWN"
+
+
 @app.get("/api/dashboard/votes")
 def dashboard_votes():
     vt = (_df_votes if _df_votes is not None else pd.read_csv(ANALYTICS_DIR / "votes_features.csv", low_memory=False)).copy()
@@ -762,6 +807,51 @@ def proxy_politiques_factchecks(slug: str, limit: int = 20, page: int = 1):
     return _pg(f"politiques/{slug}/factchecks", {"limit": limit, "page": page})
 
 
+@app.get("/api/proxy/politiques/{slug}/bio")
+def get_politician_bio(slug: str):
+    """Génère une biographie courte via Ollama à partir des mandats et scandales de l'élu."""
+    cache_key = f"bio:{slug}"
+    if cache_key in _ollama_txt_cache:
+        return {"bio": _ollama_txt_cache[cache_key], "source": "cache"}
+
+    try:
+        profile_data = _pg(f"politiques/{slug}", {})
+    except Exception:
+        raise HTTPException(404, "Élu introuvable")
+
+    name    = profile_data.get("fullName") or slug
+    mandats = profile_data.get("mandates") or []
+    party   = (profile_data.get("party") or {}).get("shortName", "")
+
+    mandats_str = "; ".join(
+        f"{m.get('title', '')} ({m.get('institution', '')})"
+        for m in mandats[:6]
+    ) or "Aucun mandat connu"
+
+    try:
+        aff_data = _pg(f"politiques/{slug}/affairs", {"limit": 3})
+        affairs  = [a.get("title", "") for a in (aff_data.get("affairs") or [])[:3] if a.get("title")]
+        aff_str  = "; ".join(affairs) if affairs else ""
+    except Exception:
+        aff_str = ""
+
+    prompt = (
+        f"Écris une biographie factuelle et neutre (3-4 phrases) en français pour {name}"
+        f"{', membre du ' + party if party else ''}.\n"
+        f"Mandats : {mandats_str}.\n"
+        f"{'Affaires judiciaires connues : ' + aff_str + '.' if aff_str else ''}\n"
+        f"Ton encyclopédique. Ne pas inventer de faits absents des informations fournies."
+    )
+    bio = _ollama_simple(
+        prompt,
+        system="Tu es un rédacteur encyclopédique neutre spécialisé en politique française.",
+        max_tokens=280,
+        cache_key=cache_key,
+    )
+    if not bio:
+        return {"bio": None, "source": "unavailable"}
+    return {"bio": bio, "source": "ollama"}
+
 
 @app.get("/api/dashboard/factchecks")
 def dashboard_factchecks():
@@ -1006,7 +1096,7 @@ def proxy_party_matrix(limit: int = 300):
 
         for v in (data.get("votes") or []):
             sc    = v.get("scrutin") or {}
-            theme = _vote_theme(sc.get("title") or "")
+            theme = _vote_theme_llm(sc.get("title") or "")
             pos   = (v.get("position") or "").upper()
             if theme not in party_themes[short]:
                 party_themes[short][theme] = {"pour": 0, "contre": 0, "abstention": 0}
@@ -1143,10 +1233,12 @@ def _fetch_google_news(source_key: str, query: str) -> list[dict]:
 
 
 def _enrich_with_sentiment(articles: list[dict]) -> list[dict]:
-    """Score les articles sans sentiment via sentiment_utils (VADER ou transformers)."""
+    """Score les articles sans sentiment : VADER/transformers d'abord, Ollama en fallback."""
     to_score = [i for i, a in enumerate(articles) if a.get("sentiment") is None]
     if not to_score:
         return articles
+    # Tentative 1 : sentiment_utils (VADER / CamemBERT)
+    scored_indices = set()
     try:
         sys.path.insert(0, str(ROOT_DIR / "pipeline"))
         from sentiment_utils import score_texts_with_labels  # type: ignore[import]
@@ -1156,8 +1248,19 @@ def _enrich_with_sentiment(articles: list[dict]) -> list[dict]:
             articles[idx]["sentiment"]       = round(result["score"], 4)
             articles[idx]["sentiment_label"] = result["label"]
             articles[idx]["enriched"]        = True
+            scored_indices.add(idx)
     except Exception as exc:
-        logger.debug(f"Enrichissement sentiment RSS : {exc}")
+        logger.debug(f"Enrichissement sentiment RSS (VADER) : {exc}")
+    # Tentative 2 : Ollama pour les articles non scorés
+    remaining = [i for i in to_score if i not in scored_indices]
+    for idx in remaining:
+        a = articles[idx]
+        text = a.get("title", "") + " " + a.get("summary", "")
+        score, label = _ollama_sentiment(text.strip())
+        if label != "UNKNOWN":
+            articles[idx]["sentiment"]       = score
+            articles[idx]["sentiment_label"] = label
+            articles[idx]["enriched"]        = True
     return articles
 
 
@@ -2010,9 +2113,40 @@ Quand `analyze_political_figure` retourne des données de presse :
 - Indique clairement si une donnée est absente
 - Sois précis et concis — pas de rembourrage"""
 
-_GROQ_MODEL   = os.getenv("GROQ_MODEL",   "llama-3.1-8b-instant")   # 500k TPD vs 100k pour 70b
+_GROQ_MODEL   = os.getenv("GROQ_MODEL",   "llama-3.1-8b-instant")
 _OLLAMA_URL   = os.getenv("OLLAMA_URL",   "http://localhost:11434")
 _OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+
+# ── Cache texte Ollama (en mémoire, survit au lifetime du process) ──
+_ollama_txt_cache: dict[str, str] = {}
+
+
+def _ollama_simple(prompt: str, system: str = "", max_tokens: int = 300, cache_key: str = "") -> str:
+    """Appel Ollama sans tool_use — retourne le texte généré, '' si indisponible."""
+    key = cache_key or prompt[:120]
+    if key in _ollama_txt_cache:
+        return _ollama_txt_cache[key]
+    try:
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        url  = _OLLAMA_URL.rstrip("/") + "/v1/chat/completions"
+        resp = http_requests.post(url, json={
+            "model":       _OLLAMA_MODEL,
+            "messages":    messages,
+            "max_tokens":  max_tokens,
+            "temperature": 0.25,
+            "stream":      False,
+        }, timeout=30)
+        if resp.status_code == 200:
+            text = (resp.json().get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
+            if text:
+                _ollama_txt_cache[key] = text
+            return text
+    except Exception:
+        pass
+    return ""
 
 
 def _llm_complete(messages: list, tools: list) -> dict:

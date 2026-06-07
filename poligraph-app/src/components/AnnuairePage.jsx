@@ -76,13 +76,19 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
   const [loadingParty,   setLoadingParty]   = useState(false);
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState(null);
+  const [bio,            setBio]            = useState(null);
 
   useEffect(() => {
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setBio(null);
     apiFetch(`politiques/${slug}`)
       .then(setProfile)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+    // Bio générée par Ollama en parallèle (non bloquant)
+    fetch(`${BASE_URL}/politiques/${slug}/bio`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d?.bio ? setBio(d.bio) : null)
+      .catch(() => {});
   }, [slug]);
 
   // Fetch party members — tries currentParty.slug then shortName.toLowerCase() as fallback
@@ -168,6 +174,19 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
           <StatBox label="Fact-checks" value={profile.factchecksCount} color="#f39c12" />
         </div>
       </div>
+
+      {/* Bio Ollama */}
+      {bio && (
+        <div style={{
+          background: "#fff", borderRadius: 10, padding: "0.9rem 1.2rem",
+          marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+          borderLeft: `4px solid ${partyColor}`, fontSize: 13, color: "#333", lineHeight: 1.6,
+        }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase",
+            letterSpacing: 1, display: "block", marginBottom: 4 }}>Biographie · généré par IA</span>
+          {bio}
+        </div>
+      )}
 
       {/* Onglets */}
       <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
