@@ -953,18 +953,23 @@ _PARTY_REPS = {
     # EELV
     "cyrielle-chatelain":   ("EELV",  "Les Écologistes",         "#2DA84A"),
     "sandra-regol":         ("EELV",  "Les Écologistes",         "#2DA84A"),
-    # PS
+    # PS (+ Dominique Potier actif Environnement, Guillaume Garot Éducation)
     "olivier-faure":        ("PS",    "Parti socialiste",        "#E75480"),
     "boris-vallaud":        ("PS",    "Parti socialiste",        "#E75480"),
-    # HOR
+    "dominique-potier":     ("PS",    "Parti socialiste",        "#E75480"),
+    "guillaume-garot":      ("PS",    "Parti socialiste",        "#E75480"),
+    # HOR (+ Agnès Firmin Le Bodo active Santé/Éducation, Marc Ferracci Environnement)
     "laurent-marcangeli":   ("HOR",   "Horizons",                "#00B5D8"),
     "frederic-valletoux":   ("HOR",   "Horizons",                "#00B5D8"),
+    "marc-ferracci":        ("HOR",   "Horizons",                "#00B5D8"),
+    "agnes-firmin-le-bodo": ("HOR",   "Horizons",                "#00B5D8"),
     # LR
     "annie-genevard":       ("LR",    "Les Républicains",        "#003189"),
+    "eric-ciotti":          ("LR",    "Les Républicains",        "#003189"),
 }
 
 @app.get("/api/proxy/party-matrix")
-def proxy_party_matrix(limit: int = 100):
+def proxy_party_matrix(limit: int = 300):
     """
     Matrice parti × thème législatif.
     Pour chaque parti, agrège les votes (pour/contre/abstention) par thème
