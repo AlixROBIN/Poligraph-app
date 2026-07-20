@@ -2787,6 +2787,74 @@ def _hf_qa_extract(question: str, context: str) -> dict:
         logger.warning(f"[QA] Échec : {exc}")
         return {"answer": "", "score": 0.0}
 
+def _hf_contextual_rag(question: str) -> str:
+    """
+    Pipeline RAG pré-LLM : Granite semantic search + CamemBERT extraction.
+    Appelé sur chaque question utilisateur pour injecter du contexte réel
+    dans le prompt avant d'envoyer à Groq.
+
+    Retourne une chaîne formatée (vide si rien de pertinent trouvé).
+    """
+    if not question.strip() or _rag_vectorizer is None:
+        return ""
+    try:
+        # 1. TF-IDF : candidats initiaux (large filet)
+        candidates = _rag_search(question, k=20)
+        if not candidates:
+            return ""
+
+        # 2. Re-ranking Granite si disponible
+        texts_to_embed = [question] + [
+            (c.get("content") or c.get("claimText") or c.get("description") or "")[:300]
+            for c in candidates
+        ]
+        embs = _hf_embed(texts_to_embed)
+        if embs and len(embs) == len(texts_to_embed):
+            q_emb    = np.array(embs[0]).reshape(1, -1)
+            doc_embs = np.array(embs[1:])
+            sims     = cosine_similarity(q_emb, doc_embs).flatten()
+            ranked   = sorted(zip(candidates, sims.tolist()), key=lambda x: -x[1])
+            top_docs = [d for d, s in ranked[:6] if s > 0.05]
+        else:
+            top_docs = candidates[:6]
+
+        if not top_docs:
+            return ""
+
+        # 3. Construire le contexte textuel
+        ctx_parts = []
+        for doc in top_docs:
+            src  = doc.get("type", "")
+            text = (doc.get("content") or doc.get("claimText") or doc.get("description") or "")[:400]
+            meta = doc.get("politician_name") or doc.get("claimant") or ""
+            label = f"[{src}] {meta} : {text}" if meta else f"[{src}] {text}"
+            ctx_parts.append(label)
+        context = " | ".join(ctx_parts)[:3500]
+
+        # 4. CamemBERT : extraction de la phrase qui répond exactement
+        qa = _hf_qa_extract(question, context)
+
+        # 5. Formater pour injection dans le prompt
+        lines = ["📚 Contexte extrait automatiquement de la base Poligraph (Granite + CamemBERT) :"]
+        if qa["answer"] and qa["score"] > 0.08:
+            lines.append(f"→ Réponse extraite (confiance {qa['score']:.0%}) : « {qa['answer']} »")
+        lines.append("Données sources :")
+        for doc in top_docs[:4]:
+            src  = doc.get("type", "")
+            pol  = doc.get("politician_name") or doc.get("claimant") or ""
+            text = (doc.get("content") or doc.get("claimText") or doc.get("description") or "")[:180]
+            title = doc.get("title") or ""
+            entry = f"  • [{src}]"
+            if pol:   entry += f" {pol} —"
+            if title: entry += f" « {title[:80]} »"
+            else:     entry += f" {text}"
+            lines.append(entry)
+        return "\n".join(lines)
+    except Exception as exc:
+        logger.warning(f"[HF-RAG] Échec pipeline contextuel : {exc}")
+        return ""
+
+
 # ── Cache texte Ollama (en mémoire, survit au lifetime du process) ──
 _ollama_txt_cache: dict[str, str] = {}
 
@@ -3027,9 +3095,17 @@ def chat_endpoint(req: ChatRequest, request: Request):
     import time as _time
     t0      = _time.monotonic()
     backend = os.getenv("LLM_BACKEND", "ollama").lower()
+
+    # RAG pré-LLM : Granite semantic search + CamemBERT extraction sur la question utilisateur
+    rag_ctx = _hf_contextual_rag(req.message)
+
     messages = [{"role": "system", "content": _AGENT_SYSTEM}]
     messages += [m for m in req.history if m.get("role") in ("user", "assistant", "tool")][-12:]
-    messages.append({"role": "user", "content": req.message})
+    # Injecter le contexte RAG dans le message utilisateur
+    user_content = req.message
+    if rag_ctx:
+        user_content = f"{req.message}\n\n{rag_ctx}"
+    messages.append({"role": "user", "content": user_content})
     steps        = []
     tools_called = []
     iterations   = 0
@@ -3081,13 +3157,19 @@ async def chat_stream_endpoint(req: ChatRequest, request: Request):
     _guard_input(req.message, request.client.host if request.client else "")
     loop = asyncio.get_event_loop()
 
+    # RAG pré-LLM (synchrone, avant le stream)
+    rag_ctx = _hf_contextual_rag(req.message)
+
     async def generate():
         import time as _time
         t0      = _time.monotonic()
         backend = os.getenv("LLM_BACKEND", "ollama").lower()
         messages = [{"role": "system", "content": _AGENT_SYSTEM}]
         messages += [m for m in req.history if m.get("role") in ("user", "assistant", "tool")][-12:]
-        messages.append({"role": "user", "content": req.message})
+        user_content = req.message
+        if rag_ctx:
+            user_content = f"{req.message}\n\n{rag_ctx}"
+        messages.append({"role": "user", "content": user_content})
         steps        = []
         tools_called = []
         iterations   = 0
