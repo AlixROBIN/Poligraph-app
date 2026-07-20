@@ -1,15 +1,14 @@
 """
-pipeline/sentiment_utils.py — Utilitaire partagé : scoring sentiment + lookup live.
+pipeline/sentiment_utils.py — Scoring sentiment multilingue.
 
-Stratégie :
-  1. Tente le modèle transformers multilingue (meilleur pour le français)
-  2. Fallback VADER si torch/transformers indisponibles (rapide, sans GPU)
-  3. Retourne 0.0 si les deux échouent
+Stratégie (par ordre de priorité) :
+  1. HuggingFace Inference API  (cloud, français natif, nécessite HF_API_KEY)
+  2. Modèle transformers local   (si torch installé — lent au démarrage)
+  3. VADER + corrections FR       (fallback léger, toujours disponible)
 
 Utilisé par :
   - enrich_sentiment.py  (scoring offline batch)
-  - vectorize.py         (chargement des scores pré-calculés)
-  - predict.py           (injection sentiment live à la prédiction)
+  - predict.py           (injection sentiment live)
   - api.py               (scoring RSS en temps réel)
 """
 
@@ -21,14 +20,32 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
-SENTIMENT_MODEL = os.getenv(
+HF_API_KEY        = os.getenv("HF_API_KEY", "")
+SENTIMENT_MODEL   = os.getenv(
     "SENTIMENT_MODEL",
     "lxyuan/distilbert-base-multilingual-cased-sentiments-student",
 )
+_HF_URL           = f"https://api-inference.huggingface.co/models/{SENTIMENT_MODEL}"
 _SNAPSHOT_DEFAULT = Path(__file__).resolve().parent.parent / "output" / "stream_snapshot.parquet"
 
-_POS_LABELS = {"positive", "pos", "label_2", "5_stars", "4_stars", "positive sentiment"}
-_NEG_LABELS = {"negative", "neg", "label_0", "1_star",  "2_stars", "negative sentiment"}
+_POS_LABELS = {"positive", "pos", "label_2", "5 stars", "4 stars", "positive sentiment"}
+_NEG_LABELS = {"negative", "neg", "label_0", "1 star",  "2 stars", "negative sentiment"}
+
+_FR_NEG = frozenset({
+    "blessé","blessée","blessés","blessées","blessure","blessures",
+    "mort","morte","morts","mortes","décès","décédé","décédée",
+    "tué","tuée","tués","tuées","assassinat","meurtre","meurtres",
+    "victime","victimes","violence","violences","agression","agressions",
+    "grave","graves","dramatique","tragique","catastrophe","drame","tragédie",
+    "crise","scandale","polémique","controverse","affaire",
+    "condamné","condamnée","condamnation","inculpé","mis en examen",
+    "arrestation","prison","incarcéré","détenu","peine","sanction","jugement","procès","tribunal",
+    "fraude","corruption","détournement","malversation",
+    "attaque","attentat","émeute","incendie","accident",
+    "licenciement","chômage","faillite","défaite","échec",
+    "enquête","plainte","signalement",
+    "injustice","racisme","harcèlement","viol","abus",
+})
 
 
 def _signed_score(label: str, score: float) -> float:
@@ -49,38 +66,7 @@ def _normalize_label(label: str) -> str:
     return "NEUTRAL"
 
 
-# Mots négatifs français forts — VADER ne les connaît pas, ce qui provoque
-# des faux positifs sur des articles de violence/crime/politique.
-_FR_NEG = frozenset({
-    "blessé","blessée","blessés","blessées","blessure","blessures",
-    "mort","morte","morts","mortes","décès","décédé","décédée",
-    "tué","tuée","tués","tuées","assassinat","meurtre","meurtres",
-    "victime","victimes","violence","violences","agression","agressions",
-    "grave","graves","dramatique","tragique","catastrophe","drame","tragédie",
-    "crise","scandale","polémique","controverse","affaire",
-    "condamné","condamnée","condamnation","inculpé","mis en examen",
-    "arrestation","garde","prison","incarcéré","détenu","peine","sanction","jugement","procès","tribunal",
-    "fraude","corruption","détournement","malversation","forfait",
-    "attaque","attentat","émeute","incendie","accident",
-    "licenciement","chômage","faillite","défaite","échec",
-    "saisie","enquête","plainte","signalement",
-    "LBD","IGPN","BRAV","violences policières",
-    "injustice","racisme","harcèlement","viol","abus",
-})
-
-_FR_POS_EXTRA = frozenset({
-    "victoire","victoires","accord","paix","progrès","innovation",
-    "récompense","solidarité","réconciliation","adoption",
-})
-
-
 def _french_correct(text: str, score: float) -> float:
-    """
-    Corrige les faux positifs VADER sur texte français.
-    Stratégie : pour chaque mot négatif fort trouvé, on applique une pénalité.
-    Sans correction : "blessé à l'œil … sacre PSG … champions" → +0.53 (faux positif).
-    Avec correction : détecte "blessé","saisie","IGPN" → pénalité -0.7 → -0.17.
-    """
     import re
     words_lower = {w.lower() for w in re.findall(r'\b\w+\b', text)}
     neg_hits = len(words_lower & _FR_NEG)
@@ -90,8 +76,82 @@ def _french_correct(text: str, score: float) -> float:
     return max(-1.0, min(1.0, score - penalty))
 
 
-def _vader_scores(texts: list[str]) -> list[float]:
-    """VADER avec correction des faux positifs sur texte français."""
+# ── 1. HuggingFace Inference API ──────────────────────────────────────────
+
+def _hf_api_scores(texts: list) -> "list | None":
+    """Appelle l'API HF Inference. Retourne None si indisponible ou sans clé."""
+    if not HF_API_KEY:
+        return None
+    try:
+        import requests as _req
+        results = []
+        for i in range(0, len(texts), 10):
+            batch = [t[:512] for t in texts[i:i + 10]]
+            resp = _req.post(
+                _HF_URL,
+                headers={"Authorization": f"Bearer {HF_API_KEY}"},
+                json={"inputs": batch},
+                timeout=20,
+            )
+            if resp.status_code == 503:
+                log.warning("[HF] Modèle en cours de chargement (cold start) — fallback VADER")
+                return None
+            if resp.status_code != 200:
+                log.warning(f"[HF] API erreur {resp.status_code}: {resp.text[:120]}")
+                return None
+            data = resp.json()
+            for item in data:
+                if isinstance(item, list) and item:
+                    best = max(item, key=lambda x: x.get("score", 0))
+                    results.append(_signed_score(best["label"], best["score"]))
+                else:
+                    results.append(0.0)
+        log.debug(f"[HF] {len(results)} textes scorés via API Inference")
+        return results
+    except Exception as exc:
+        log.warning(f"[HF] API échec ({exc}) — fallback")
+        return None
+
+
+# ── 2. Transformers local ─────────────────────────────────────────────────
+
+def _transformers_available() -> bool:
+    try:
+        import torch        # noqa: F401
+        import transformers # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _local_transformers_scores(texts: list) -> "list | None":
+    if not _transformers_available():
+        return None
+    try:
+        from transformers import pipeline as hf_pipeline
+        if not hasattr(_local_transformers_scores, "_clf"):
+            log.info(f"[Local] Chargement modèle {SENTIMENT_MODEL}…")
+            _local_transformers_scores._clf = hf_pipeline(
+                "text-classification",
+                model=SENTIMENT_MODEL,
+                tokenizer=SENTIMENT_MODEL,
+                batch_size=16,
+                truncation=True,
+                max_length=512,
+                device=-1,
+            )
+        results = _local_transformers_scores._clf([t[:1000] for t in texts])
+        return [_signed_score(r["label"], r["score"]) for r in results]
+    except Exception as exc:
+        log.warning(f"[Local] Modèle transformers échoué ({exc}) — fallback VADER")
+        if hasattr(_local_transformers_scores, "_clf"):
+            del _local_transformers_scores._clf
+        return None
+
+
+# ── 3. VADER (fallback toujours disponible) ───────────────────────────────
+
+def _vader_scores(texts: list) -> list:
     try:
         from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
         if not hasattr(_vader_scores, "_analyzer"):
@@ -101,70 +161,37 @@ def _vader_scores(texts: list[str]) -> list[float]:
             for t in texts
         ]
     except Exception as exc:
-        log.warning(f"VADER indisponible ({exc}) → sentiment=0.0")
+        log.warning(f"[VADER] Indisponible ({exc}) → 0.0")
         return [0.0] * len(texts)
 
 
-def _transformers_available() -> bool:
-    """Vérifie que transformers + torch sont utilisables sans crasher."""
-    try:
-        import torch          # noqa: F401
-        import transformers   # noqa: F401
-        return True
-    except ImportError:
-        return False
+# ── Interface publique ────────────────────────────────────────────────────
 
-
-def score_texts(texts: list[str]) -> list[float]:
+def score_texts(texts: list) -> list:
     """
-    Analyse de sentiment sur une liste de textes.
-    Retourne des scores signés ∈ [-1, 1].
-    Essaie transformers d'abord, puis VADER, puis 0.0.
+    Analyse de sentiment — scores signés ∈ [-1, 1].
+    Priorité : HF API > transformers local > VADER.
     """
     if not texts:
         return []
 
-    if _transformers_available():
-        try:
-            from transformers import pipeline as hf_pipeline
-            if not hasattr(score_texts, "_clf"):
-                log.info(f"Chargement modèle sentiment ({SENTIMENT_MODEL})…")
-                score_texts._clf = hf_pipeline(
-                    "text-classification",
-                    model=SENTIMENT_MODEL,
-                    tokenizer=SENTIMENT_MODEL,
-                    batch_size=16,
-                    truncation=True,
-                    max_length=512,
-                    device=-1,
-                )
-            results = score_texts._clf([t[:1000] for t in texts])
-            return [_signed_score(r["label"], r["score"]) for r in results]
-        except Exception as exc:
-            log.warning(f"Modèle transformers échoué ({exc}) → fallback VADER")
-            if hasattr(score_texts, "_clf"):
-                del score_texts._clf
+    result = _hf_api_scores(texts)
+    if result is not None:
+        return result
 
-    log.info("Utilisation de VADER comme moteur de sentiment")
+    result = _local_transformers_scores(texts)
+    if result is not None:
+        return result
+
     return _vader_scores(texts)
 
 
-def score_texts_with_labels(texts: list[str]) -> list[dict]:
-    """
-    Retourne une liste de dicts {"score": float, "label": str} pour chaque texte.
-    Utile pour enrichir les articles RSS directement.
-    """
+def score_texts_with_labels(texts: list) -> list:
     scores = score_texts(texts)
-    results = []
-    for s in scores:
-        if s > 0.05:
-            label = "POSITIVE"
-        elif s < -0.05:
-            label = "NEGATIVE"
-        else:
-            label = "NEUTRAL"
-        results.append({"score": s, "label": label})
-    return results
+    return [
+        {"score": s, "label": "POSITIVE" if s > 0.05 else "NEGATIVE" if s < -0.05 else "NEUTRAL"}
+        for s in scores
+    ]
 
 
 def score_single(text: str) -> float:
@@ -172,40 +199,25 @@ def score_single(text: str) -> float:
     return results[0] if results else 0.0
 
 
-def get_live_sentiment(entities: list[str], snapshot_path: str | None = None) -> float:
-    """
-    Retourne le sentiment moyen des articles récents mentionnant l'une des entités.
-    Lit depuis le snapshot Parquet écrit par streaming/consumer.py.
-    Retourne 0.0 si aucun article trouvé ou snapshot absent.
-    """
+def get_live_sentiment(entities: list, snapshot_path: str = None) -> float:
+    """Sentiment moyen depuis le snapshot Kafka. Retourne 0.0 si absent."""
     parquet = Path(snapshot_path) if snapshot_path else _SNAPSHOT_DEFAULT
-
     if not parquet.exists():
-        log.debug("Snapshot Kafka absent → sentiment live = 0.0")
         return 0.0
-
     try:
         import pandas as pd
         df = pd.read_parquet(parquet)
         if df.empty or "sentiment" not in df.columns:
             return 0.0
-
         if entities and "entities" in df.columns:
             entities_lower = {e.lower() for e in entities}
-
-            def _mentions(ents) -> bool:
-                if not isinstance(ents, list):
-                    return False
-                return any(str(e).lower() in entities_lower for e in ents)
-
-            df = df[df["entities"].apply(_mentions)]
-
+            df = df[df["entities"].apply(
+                lambda ents: isinstance(ents, list) and any(str(e).lower() in entities_lower for e in ents)
+            )]
         if df.empty:
             return 0.0
-
         scores = pd.to_numeric(df["sentiment"], errors="coerce").dropna()
         return float(scores.mean()) if len(scores) > 0 else 0.0
-
     except Exception as exc:
-        log.warning(f"Lecture snapshot échouée : {exc}")
+        log.warning(f"[Snapshot] Lecture échouée : {exc}")
         return 0.0
