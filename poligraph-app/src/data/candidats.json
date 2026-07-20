@@ -1,0 +1,499 @@
+{
+  "source": "monvote2027.fr",
+  "date_extraction": "2026-07-20",
+  "candidats": [
+    { "id": "arthaud",      "nom": "Nathalie Arthaud",        "parti": "Lutte Ouvrière",             "couleur": "#c0392b", "emoji": "✊" },
+    { "id": "asselineau",   "nom": "François Asselineau",     "parti": "Union Populaire Républicaine","couleur": "#1a1a8e", "emoji": "🇫🇷" },
+    { "id": "attal",        "nom": "Gabriel Attal",           "parti": "Renaissance",                "couleur": "#f0b400", "emoji": "🟡" },
+    { "id": "batho",        "nom": "Delphine Batho",          "parti": "Génération Écologie",        "couleur": "#2e7d32", "emoji": "🌱" },
+    { "id": "bertrand",     "nom": "Xavier Bertrand",         "parti": "Nous France",                "couleur": "#004494", "emoji": "🔷" },
+    { "id": "branco",       "nom": "Juan Branco",             "parti": "Les Ruches",                 "couleur": "#e67e22", "emoji": "🟠" },
+    { "id": "cazeneuve",    "nom": "Bernard Cazeneuve",       "parti": "La Convention",              "couleur": "#c0392b", "emoji": "🌹" },
+    { "id": "devillepin",   "nom": "Dominique de Villepin",   "parti": "La France Humaniste",        "couleur": "#8e44ad", "emoji": "🔮" },
+    { "id": "dupont-aignan","nom": "Nicolas Dupont-Aignan",   "parti": "Debout la France",           "couleur": "#00529b", "emoji": "🐓" },
+    { "id": "faure",        "nom": "Olivier Faure",           "parti": "Parti Socialiste",           "couleur": "#e91e8c", "emoji": "🌹" },
+    { "id": "kazib",        "nom": "Anasse Kazib",            "parti": "Révolution Permanente",      "couleur": "#8b0000", "emoji": "⭐" },
+    { "id": "le-pen",       "nom": "Marine Le Pen",           "parti": "Rassemblement National",     "couleur": "#003189", "emoji": "🔵" },
+    { "id": "philippe",     "nom": "Édouard Philippe",        "parti": "Horizons",                   "couleur": "#00A3E0", "emoji": "💙" },
+    { "id": "philippot",    "nom": "Florian Philippot",       "parti": "Les Patriotes",              "couleur": "#002395", "emoji": "🗡️" },
+    { "id": "retailleau",   "nom": "Bruno Retailleau",        "parti": "Les Républicains",           "couleur": "#0066CC", "emoji": "🔷" },
+    { "id": "ruffin",       "nom": "François Ruffin",         "parti": "Debout!",                    "couleur": "#e74c3c", "emoji": "✊" },
+    { "id": "roussel",      "nom": "Fabien Roussel",          "parti": "Parti Communiste Français",  "couleur": "#d32f2f", "emoji": "⚒️" },
+    { "id": "tondelier",    "nom": "Marine Tondelier",        "parti": "Europe Écologie Les Verts",  "couleur": "#1b8a3c", "emoji": "🌿" },
+    { "id": "zemmour",      "nom": "Éric Zemmour",            "parti": "Reconquête",                 "couleur": "#1a1a1a", "emoji": "⚫" }
+  ],
+
+  "quiz": [
+    {
+      "id": 1,
+      "theme": "Retraites",
+      "emoji": "👴",
+      "texte": "Revenir à la retraite à 60 ans pour tous",
+      "positions": {
+        "arthaud": 1, "asselineau": 0, "attal": -1, "batho": 1, "bertrand": -1,
+        "branco": 0, "cazeneuve": 1, "devillepin": 1, "dupont-aignan": 0, "faure": 0,
+        "kazib": 1, "le-pen": -1, "philippe": -1, "philippot": 1, "retailleau": -1,
+        "ruffin": 1, "roussel": 1, "tondelier": 0, "zemmour": -1
+      }
+    },
+    {
+      "id": 2,
+      "theme": "Immigration",
+      "emoji": "🌍",
+      "texte": "Réduire significativement l'immigration légale en France",
+      "positions": {
+        "arthaud": -1, "asselineau": 1, "attal": 1, "batho": -1, "bertrand": 1,
+        "branco": 0, "cazeneuve": -1, "devillepin": -1, "dupont-aignan": 1, "faure": -1,
+        "kazib": -1, "le-pen": 1, "philippe": 1, "philippot": 1, "retailleau": 1,
+        "ruffin": 0, "roussel": 0, "tondelier": -1, "zemmour": 1
+      }
+    },
+    {
+      "id": 3,
+      "theme": "Fiscalité",
+      "emoji": "💰",
+      "texte": "Rétablir l'ISF (impôt de solidarité sur la fortune)",
+      "positions": {
+        "arthaud": 1, "asselineau": 0, "attal": -1, "batho": 1, "bertrand": -1,
+        "branco": 1, "cazeneuve": 1, "devillepin": 1, "dupont-aignan": 1, "faure": 1,
+        "kazib": 1, "le-pen": 0, "philippe": -1, "philippot": 1, "retailleau": -1,
+        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": -1
+      }
+    },
+    {
+      "id": 4,
+      "theme": "Énergie",
+      "emoji": "⚛️",
+      "texte": "Maintenir le nucléaire comme pilier de la politique énergétique",
+      "positions": {
+        "arthaud": -1, "asselineau": 1, "attal": 1, "batho": -1, "bertrand": 1,
+        "branco": 1, "cazeneuve": 0, "devillepin": 0, "dupont-aignan": 1, "faure": -1,
+        "kazib": -1, "le-pen": 1, "philippe": 1, "philippot": 1, "retailleau": 1,
+        "ruffin": -1, "roussel": 1, "tondelier": -1, "zemmour": 1
+      }
+    },
+    {
+      "id": 5,
+      "theme": "OTAN",
+      "emoji": "🛡️",
+      "texte": "Maintenir la France dans le commandement intégré de l'OTAN",
+      "positions": {
+        "arthaud": -1, "asselineau": -1, "attal": 1, "batho": 0, "bertrand": 1,
+        "branco": -1, "cazeneuve": 1, "devillepin": 0, "dupont-aignan": -1, "faure": 0,
+        "kazib": -1, "le-pen": 1, "philippe": 1, "philippot": -1, "retailleau": 1,
+        "ruffin": -1, "roussel": -1, "tondelier": 0, "zemmour": 1
+      }
+    },
+    {
+      "id": 6,
+      "theme": "Sécurité",
+      "emoji": "🚔",
+      "texte": "Rétablir des peines planchers obligatoires pour les récidivistes",
+      "positions": {
+        "arthaud": -1, "asselineau": 1, "attal": 1, "batho": 0, "bertrand": 1,
+        "branco": -1, "cazeneuve": -1, "devillepin": 0, "dupont-aignan": 1, "faure": -1,
+        "kazib": -1, "le-pen": 1, "philippe": 1, "philippot": 1, "retailleau": 1,
+        "ruffin": -1, "roussel": -1, "tondelier": -1, "zemmour": 1
+      }
+    },
+    {
+      "id": 7,
+      "theme": "Environnement",
+      "emoji": "🌱",
+      "texte": "Interdire progressivement les pesticides chimiques dangereux",
+      "positions": {
+        "arthaud": 1, "asselineau": 0, "attal": -1, "batho": 1, "bertrand": -1,
+        "branco": 1, "cazeneuve": 0, "devillepin": 1, "dupont-aignan": 0, "faure": 1,
+        "kazib": 1, "le-pen": -1, "philippe": -1, "philippot": -1, "retailleau": -1,
+        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": -1
+      }
+    },
+    {
+      "id": 8,
+      "theme": "Social",
+      "emoji": "🤝",
+      "texte": "Conditionner le RSA à des heures d'activité obligatoires par semaine",
+      "positions": {
+        "arthaud": -1, "asselineau": 0, "attal": 1, "batho": -1, "bertrand": 1,
+        "branco": -1, "cazeneuve": -1, "devillepin": -1, "dupont-aignan": 1, "faure": -1,
+        "kazib": -1, "le-pen": 1, "philippe": 1, "philippot": 0, "retailleau": 1,
+        "ruffin": -1, "roussel": -1, "tondelier": -1, "zemmour": 1
+      }
+    },
+    {
+      "id": 9,
+      "theme": "Logement",
+      "emoji": "🏠",
+      "texte": "Encadrer strictement les loyers dans les grandes villes",
+      "positions": {
+        "arthaud": 1, "asselineau": 0, "attal": -1, "batho": 1, "bertrand": -1,
+        "branco": 1, "cazeneuve": 1, "devillepin": 1, "dupont-aignan": 0, "faure": 1,
+        "kazib": 1, "le-pen": -1, "philippe": -1, "philippot": 0, "retailleau": -1,
+        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": -1
+      }
+    },
+    {
+      "id": 10,
+      "theme": "Société",
+      "emoji": "🌿",
+      "texte": "Légaliser le cannabis récréatif sous contrôle de l'État",
+      "positions": {
+        "arthaud": 0, "asselineau": -1, "attal": -1, "batho": 1, "bertrand": -1,
+        "branco": 1, "cazeneuve": 0, "devillepin": 0, "dupont-aignan": -1, "faure": 0,
+        "kazib": 1, "le-pen": -1, "philippe": -1, "philippot": -1, "retailleau": -1,
+        "ruffin": 1, "roussel": 0, "tondelier": 1, "zemmour": -1
+      }
+    },
+    {
+      "id": 11,
+      "theme": "Travail",
+      "emoji": "💶",
+      "texte": "Augmenter significativement le SMIC (vers 1600€ nets minimum)",
+      "positions": {
+        "arthaud": 1, "asselineau": 1, "attal": -1, "batho": 1, "bertrand": 0,
+        "branco": 0, "cazeneuve": 1, "devillepin": 1, "dupont-aignan": 1, "faure": 1,
+        "kazib": 1, "le-pen": 0, "philippe": -1, "philippot": 1, "retailleau": -1,
+        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": 0
+      }
+    },
+    {
+      "id": 12,
+      "theme": "Services publics",
+      "emoji": "🏥",
+      "texte": "Embaucher massivement dans les hôpitaux et l'Éducation nationale",
+      "positions": {
+        "arthaud": 1, "asselineau": 1, "attal": -1, "batho": 1, "bertrand": -1,
+        "branco": 1, "cazeneuve": 1, "devillepin": 1, "dupont-aignan": 1, "faure": 1,
+        "kazib": 1, "le-pen": -1, "philippe": -1, "philippot": 1, "retailleau": -1,
+        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": -1
+      }
+    },
+    {
+      "id": 13,
+      "theme": "Démocratie",
+      "emoji": "🗳️",
+      "texte": "Adopter la représentation proportionnelle aux élections législatives",
+      "positions": {
+        "arthaud": 1, "asselineau": 0, "attal": -1, "batho": 1, "bertrand": -1,
+        "branco": 1, "cazeneuve": 1, "devillepin": 1, "dupont-aignan": 0, "faure": 1,
+        "kazib": 1, "le-pen": 1, "philippe": -1, "philippot": 1, "retailleau": -1,
+        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": 0
+      }
+    },
+    {
+      "id": 14,
+      "theme": "Europe",
+      "emoji": "🇪🇺",
+      "texte": "Renforcer l'intégration européenne et construire une Europe fédérale",
+      "positions": {
+        "arthaud": -1, "asselineau": -1, "attal": 1, "batho": 1, "bertrand": 0,
+        "branco": -1, "cazeneuve": 1, "devillepin": 1, "dupont-aignan": -1, "faure": 1,
+        "kazib": -1, "le-pen": -1, "philippe": 1, "philippot": -1, "retailleau": -1,
+        "ruffin": -1, "roussel": -1, "tondelier": 1, "zemmour": -1
+      }
+    },
+    {
+      "id": 15,
+      "theme": "Fin de vie",
+      "emoji": "💙",
+      "texte": "Autoriser l'aide à mourir (euthanasie active) pour les malades en phase terminale",
+      "positions": {
+        "arthaud": 0, "asselineau": 0, "attal": 1, "batho": 1, "bertrand": -1,
+        "branco": 1, "cazeneuve": 0, "devillepin": 0, "dupont-aignan": 0, "faure": 1,
+        "kazib": 0, "le-pen": -1, "philippe": 0, "philippot": -1, "retailleau": -1,
+        "ruffin": 1, "roussel": 0, "tondelier": 1, "zemmour": -1
+      }
+    },
+    {
+      "id": 16,
+      "theme": "Laïcité",
+      "emoji": "🕌",
+      "texte": "Interdire les signes religieux ostentatoires dans les services publics",
+      "positions": {
+        "arthaud": 0, "asselineau": 0, "attal": 1, "batho": 0, "bertrand": 1,
+        "branco": 0, "cazeneuve": 0, "devillepin": 0, "dupont-aignan": 1, "faure": 0,
+        "kazib": -1, "le-pen": 1, "philippe": 0, "philippot": 1, "retailleau": 1,
+        "ruffin": 0, "roussel": 0, "tondelier": 0, "zemmour": 1
+      }
+    },
+    {
+      "id": 17,
+      "theme": "Institutions",
+      "emoji": "🏛️",
+      "texte": "Passer à une VIe République avec davantage de pouvoirs au Parlement",
+      "positions": {
+        "arthaud": 1, "asselineau": 0, "attal": -1, "batho": 1, "bertrand": -1,
+        "branco": 1, "cazeneuve": 0, "devillepin": 1, "dupont-aignan": 0, "faure": 1,
+        "kazib": 1, "le-pen": -1, "philippe": -1, "philippot": 1, "retailleau": -1,
+        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": -1
+      }
+    },
+    {
+      "id": 18,
+      "theme": "Ukraine",
+      "emoji": "🇺🇦",
+      "texte": "Augmenter le soutien militaire à l'Ukraine face à la Russie",
+      "positions": {
+        "arthaud": -1, "asselineau": -1, "attal": 1, "batho": 0, "bertrand": 1,
+        "branco": -1, "cazeneuve": 1, "devillepin": 1, "dupont-aignan": -1, "faure": 1,
+        "kazib": -1, "le-pen": 0, "philippe": 1, "philippot": -1, "retailleau": 1,
+        "ruffin": 1, "roussel": 0, "tondelier": 1, "zemmour": 0
+      }
+    },
+    {
+      "id": 19,
+      "theme": "Économie",
+      "emoji": "🏭",
+      "texte": "Nationaliser les secteurs stratégiques (énergie, transports, autoroutes)",
+      "positions": {
+        "arthaud": 1, "asselineau": 1, "attal": -1, "batho": 0, "bertrand": -1,
+        "branco": 1, "cazeneuve": 0, "devillepin": 0, "dupont-aignan": 1, "faure": 0,
+        "kazib": 1, "le-pen": 1, "philippe": -1, "philippot": 1, "retailleau": -1,
+        "ruffin": 1, "roussel": 1, "tondelier": 0, "zemmour": -1
+      }
+    },
+    {
+      "id": 20,
+      "theme": "Démocratie directe",
+      "emoji": "📋",
+      "texte": "Instaurer le référendum d'initiative citoyenne (RIC) en toutes matières",
+      "positions": {
+        "arthaud": 1, "asselineau": 1, "attal": -1, "batho": 1, "bertrand": -1,
+        "branco": 1, "cazeneuve": 0, "devillepin": 1, "dupont-aignan": 1, "faure": 1,
+        "kazib": 1, "le-pen": 1, "philippe": -1, "philippot": 1, "retailleau": -1,
+        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": 0
+      }
+    }
+  ],
+
+  "propositions_par_candidat": {
+    "arthaud": [
+      { "theme": "Immigration", "proposition": "Régularisation de tous les sans-papiers et accueil de ceux venant travailler" },
+      { "theme": "Fiscalité", "proposition": "Augmentation des impôts sur les très grandes fortunes et expropriation directe" },
+      { "theme": "Retraite", "proposition": "Abaissement de l'âge légal de départ à 60 ans" },
+      { "theme": "Salaire", "proposition": "Augmentation du SMIC à 2000 euros nets par mois" },
+      { "theme": "Services publics", "proposition": "Embauche massive dans hôpitaux et Éducation nationale" },
+      { "theme": "Économie", "proposition": "Nationalisation des secteurs stratégiques sans compensation aux capitalistes" },
+      { "theme": "Logement", "proposition": "Réquisition des logements vides et blocage des loyers" },
+      { "theme": "Justice", "proposition": "Privilégier les peines alternatives à l'emprisonnement pour délits non-violents" },
+      { "theme": "Environnement", "proposition": "Suppression des aides publiques aux énergies fossiles" },
+      { "theme": "International", "proposition": "Retrait des troupes françaises d'Afrique et non-alignement militaire" }
+    ],
+    "asselineau": [
+      { "theme": "Europe", "proposition": "Sortir de l'Union Européenne, de l'euro et de l'OTAN" },
+      { "theme": "Immigration", "proposition": "Réduire l'immigration légale via référendums sur le droit du sol" },
+      { "theme": "Économie", "proposition": "Nationaliser les grands services publics (EDF, SNCF, La Poste, autoroutes)" },
+      { "theme": "Retraites", "proposition": "Arrêter l'augmentation des annuités, limitées à 41, et préserver la répartition" },
+      { "theme": "Salaires", "proposition": "Augmenter le SMIC de 24% sur le quinquennat" },
+      { "theme": "Démocratie", "proposition": "Instaurer le référendum d'initiative citoyenne (RIC)" },
+      { "theme": "Sécurité", "proposition": "Renforcer les peines planchers pour les récidivistes" },
+      { "theme": "Santé", "proposition": "Augmenter le budget des hôpitaux de 15%" },
+      { "theme": "Défense", "proposition": "Porter le budget de défense à au moins 3% du PIB" },
+      { "theme": "Agriculture", "proposition": "Garantir un prix minimum de viabilité pour les revenus agricoles" }
+    ],
+    "attal": [
+      { "theme": "Immigration", "proposition": "Réduire significativement l'immigration légale" },
+      { "theme": "Économie Fiscalité", "proposition": "Refuser l'augmentation des impôts sur les grandes fortunes" },
+      { "theme": "Travail Social", "proposition": "Reformer les retraites sans augmenter l'âge légal" },
+      { "theme": "Travail Économie", "proposition": "Porter la durée légale du travail au-delà de 35 heures" },
+      { "theme": "Énergie", "proposition": "Maintenir le nucléaire comme pilier de la politique énergétique" },
+      { "theme": "Europe", "proposition": "Refuser de quitter l'Union Européenne" },
+      { "theme": "Défense International", "proposition": "Soutenir davantage l'Ukraine militairement" },
+      { "theme": "Sécurité Justice", "proposition": "Alourdir les peines pour crimes et délits violents, rétablir les peines planchers" },
+      { "theme": "Éducation", "proposition": "Rendre l'uniforme scolaire obligatoire progressivement" },
+      { "theme": "Santé Société", "proposition": "Légaliser le droit à l'aide à mourir" }
+    ],
+    "batho": [
+      { "theme": "Immigration", "proposition": "S'oppose à la réduction significative de l'immigration légale" },
+      { "theme": "Fiscalité", "proposition": "Augmenter les impôts sur les très grandes fortunes" },
+      { "theme": "Retraites", "proposition": "Abaisse l'âge légal de départ à la retraite" },
+      { "theme": "Europe", "proposition": "Oppose catégoriquement la sortie de l'Union Européenne" },
+      { "theme": "Énergie", "proposition": "Rejette le nucléaire comme pilier de la politique énergétique" },
+      { "theme": "Services publics", "proposition": "S'oppose à l'ouverture des services publics à la gestion privée" },
+      { "theme": "Environnement", "proposition": "Fin des subventions aux énergies fossiles" },
+      { "theme": "Social", "proposition": "Instaurer un revenu universel de base" },
+      { "theme": "Démocratie", "proposition": "Passer à une VIe République et abolir le présidentialisme" },
+      { "theme": "Société", "proposition": "Légaliser l'aide à mourir" }
+    ],
+    "bertrand": [
+      { "theme": "Immigration", "proposition": "Réduire significativement l'immigration légale : diviser le regroupement familial par 3, réduire d'un tiers les permis de travail" },
+      { "theme": "Sécurité", "proposition": "Augmenter les peines pour crimes violents, créer 20 000 places de prison" },
+      { "theme": "Fiscalité", "proposition": "Baisser les impôts de production de moitié, financé par réductions de dépenses publiques" },
+      { "theme": "Retraite", "proposition": "Repousser l'âge légal de départ : progressivement jusqu'à 64 ans puis 65 ans" },
+      { "theme": "Emploi", "proposition": "Heures supplémentaires sans impôt ni charges sociales ; augmentation nette salaire net 3%" },
+      { "theme": "Énergie", "proposition": "Nucléaire pilier stratégique : lancer nouveaux EPR, maintenir nucléaire au-delà de 50% du mix" },
+      { "theme": "Justice pénale", "proposition": "Majorité pénale à 15 ans ; peines planchers obligatoires pour récidivistes" },
+      { "theme": "Aides sociales", "proposition": "Étrangers attendent 5 ans avant accès aux prestations ; supprimer AME" },
+      { "theme": "Défense", "proposition": "Budget défense vers 3% PIB ; maintenir France dans OTAN ; développer défense européenne" },
+      { "theme": "Europe", "proposition": "Refonder l'UE sans sortie : rendre l'Europe plus proche des peuples" }
+    ],
+    "branco": [
+      { "theme": "Fiscalité", "proposition": "Rétablissement de l'ISF avec mécanisme de précompte ; taxation confiscatoire au-delà de 100M€" },
+      { "theme": "Démocratie", "proposition": "Création du RIC en toutes matières ; mandats impératifs et révocables à tous les niveaux" },
+      { "theme": "Europe", "proposition": "Référendum sur sortie de l'UE, l'euro et/ou l'espace Schengen" },
+      { "theme": "Défense", "proposition": "Référendum sur sortie de l'OTAN" },
+      { "theme": "Services publics", "proposition": "Nationalisation de l'électricité, l'eau et des autoroutes" },
+      { "theme": "Santé", "proposition": "Accès universel aux soins sans exclusion ; abolition mutuelles privées" },
+      { "theme": "Société", "proposition": "Légalisation du cannabis récréatif avec monopole d'État sur production et distribution" },
+      { "theme": "Institutions", "proposition": "Assemblée constituante 12 mois : deux-tiers élus, tiers tirage au sort" },
+      { "theme": "Agriculture", "proposition": "Rétablissement prix planchers garantis ; moratoire restructuration dette agriculteurs" },
+      { "theme": "Logement", "proposition": "Lutte contre spéculation ; garantie universelle loyers" }
+    ],
+    "cazeneuve": [
+      { "theme": "Immigration", "proposition": "S'oppose à la réduction significative de l'immigration légale" },
+      { "theme": "Justice", "proposition": "Privilégie la prévention de la délinquance plutôt que l'alourdissement des peines" },
+      { "theme": "Fiscalité", "proposition": "Augmenter les impôts sur les très grandes fortunes et hauts revenus" },
+      { "theme": "Retraites", "proposition": "S'oppose à l'augmentation de l'âge légal de départ à la retraite" },
+      { "theme": "Europe", "proposition": "Défend l'Union européenne et rejette le retrait de l'UE" },
+      { "theme": "Démocratie", "proposition": "Soutient l'introduction de la proportionnelle aux législatives" },
+      { "theme": "Services publics", "proposition": "Embauche massive dans les hôpitaux et l'Éducation nationale" },
+      { "theme": "Travail", "proposition": "Augmentation significative du SMIC et revalorisation des salaires" },
+      { "theme": "Défense", "proposition": "Maintien du nucléaire et augmentation du budget de défense à 3% du PIB" },
+      { "theme": "Ukraine", "proposition": "Soutien militaire renforcé à l'Ukraine contre la menace russe" }
+    ],
+    "devillepin": [
+      { "theme": "Immigration", "proposition": "S'oppose à la réduction significative de l'immigration légale ; privilégie le dialogue avec les pays partenaires" },
+      { "theme": "Fiscalité", "proposition": "Favorable à une contribution des plus riches ; adaptation de l'ISF et taxe Zucman" },
+      { "theme": "Retraites", "proposition": "Favorable à l'abrogation de la réforme portant l'âge légal à 64 ans ; défend une retraite à points" },
+      { "theme": "Justice internationale", "proposition": "La France doit appliquer les mandats d'arrêt de la CPI, y compris contre des dirigeants alliés" },
+      { "theme": "Europe", "proposition": "Appel à un sursaut euro-gaulliste fondé sur la souveraineté et solidarité européennes" },
+      { "theme": "Démocratie", "proposition": "Plaide pour un référendum d'initiative citoyenne et un rééquilibrage des pouvoirs au Parlement" },
+      { "theme": "Services publics", "proposition": "Rejette explicitement la privatisation des services publics essentiels" },
+      { "theme": "Défense", "proposition": "Préconise un pilier européen de sécurité viable ; renforcement militaire européen significatif" },
+      { "theme": "Énergie", "proposition": "Défend un mix alliant nucléaire moderne et renouvelables massifs" },
+      { "theme": "Logement", "proposition": "Politique de construction massive de logements sociaux ; 20-30% de toute nouvelle construction réservée au social" }
+    ],
+    "dupont-aignan": [
+      { "theme": "Europe", "proposition": "Sortir de l'Union Européenne au plus vite (Frexit)" },
+      { "theme": "Immigration", "proposition": "Réduire significativement l'immigration légale et supprimer le droit du sol" },
+      { "theme": "Sécurité", "proposition": "Alourdir les peines pour crimes et délits violents, instaurer des peines planchers" },
+      { "theme": "Fiscalité", "proposition": "Augmenter les impôts sur les très grandes fortunes (>10M€)" },
+      { "theme": "Retraites", "proposition": "Maintien à 62 ans (abaisser depuis 64 mais pas jusqu'à 60)" },
+      { "theme": "Défense", "proposition": "Sortir du commandement militaire intégré de l'OTAN" },
+      { "theme": "Énergie", "proposition": "Maintenir le nucléaire à 70% minimum de la production d'électricité" },
+      { "theme": "Démocratie", "proposition": "Instaurer le référendum d'initiative citoyenne (RIC)" },
+      { "theme": "Travail", "proposition": "Augmenter significativement le SMIC" },
+      { "theme": "Économie", "proposition": "Nationaliser les secteurs stratégiques (EDF, autoroutes)" }
+    ],
+    "faure": [
+      { "theme": "Immigration", "proposition": "S'oppose à la réduction de l'immigration légale ; défend la tradition d'accueil" },
+      { "theme": "Justice", "proposition": "Refuse l'alourdissement des peines ; privilégie l'individualisation des sentences" },
+      { "theme": "Fiscalité", "proposition": "Augmenter les impôts sur les très grandes fortunes ; rétablir l'ISF" },
+      { "theme": "Retraites", "proposition": "Abaisser l'âge légal de départ à 62 ans ; maintenir le système par répartition" },
+      { "theme": "International", "proposition": "Appliquer les mandats d'arrêt de la CPI ; soutenir l'Ukraine militairement" },
+      { "theme": "Europe", "proposition": "Rejette la sortie de l'UE ; défend une réforme de l'Union européenne" },
+      { "theme": "Emploi", "proposition": "Augmenter le SMIC significativement ; embaucher massivement dans hôpitaux et éducation" },
+      { "theme": "Énergie", "proposition": "S'oppose au nucléaire comme pilier ; vise un mix 100% décarboné en 2050" },
+      { "theme": "Logement", "proposition": "Encadrer les loyers ; réquisitionner les logements vacants ; construire du logement social" },
+      { "theme": "Société", "proposition": "Légaliser l'aide à mourir ; étendre la PMA ; protéger le droit à l'avortement" }
+    ],
+    "kazib": [
+      { "theme": "Immigration", "proposition": "Ouverture des frontières, liberté de circulation et régularisation immédiate de tous les sans-papiers" },
+      { "theme": "Fiscalité", "proposition": "Rétablissement de l'impôt sur les grandes fortunes avec imposition jusqu'à 100% sur les revenus du capital au-dessus de 260 000 euros" },
+      { "theme": "Retraite", "proposition": "Rétablissement de la retraite à taux plein à 60 ans avec 37,5 annuités de cotisation" },
+      { "theme": "International", "proposition": "Quitter l'OTAN et mettre fin aux interventions militaires françaises à l'étranger" },
+      { "theme": "Énergie", "proposition": "Sortie du nucléaire et transition vers les énergies renouvelables avec nationalisation du secteur" },
+      { "theme": "Services publics", "proposition": "Renationalisation de l'ensemble des secteurs stratégiques sous contrôle des travailleurs" },
+      { "theme": "Salaires", "proposition": "Augmentation généralisée des salaires de 300 euros net et revalorisation du SMIC à 1800 euros nets" },
+      { "theme": "Justice", "proposition": "Dissolution des corps spéciaux de police et réforme du système carcéral" },
+      { "theme": "Institutions", "proposition": "Passage à une VIe République avec assemblée unique concentrant les pouvoirs législatif et exécutif" },
+      { "theme": "Logement", "proposition": "Réquisition des logements vides et blocage des loyers dans les zones de spéculation" }
+    ],
+    "le-pen": [
+      { "theme": "Immigration", "proposition": "Réduire significativement l'immigration légale en France" },
+      { "theme": "Sécurité Justice", "proposition": "Alourdir les peines pour les crimes et délits violents" },
+      { "theme": "Économie Fiscalité", "proposition": "S'opposer à l'augmentation des impôts sur les très grandes fortunes" },
+      { "theme": "Social Travail", "proposition": "Maintenir ou augmenter l'âge légal de départ à la retraite" },
+      { "theme": "Énergie", "proposition": "Maintenir le nucléaire comme pilier de la politique énergétique" },
+      { "theme": "Démocratie Institutions", "proposition": "Introduire une part de représentation proportionnelle aux législatives" },
+      { "theme": "Démocratie Institutions", "proposition": "Instaurer le référendum d'initiative citoyenne" },
+      { "theme": "Éducation", "proposition": "Rendre obligatoire l'uniforme scolaire" },
+      { "theme": "Immigration", "proposition": "Mettre fin au droit du sol en France" },
+      { "theme": "Immigration", "proposition": "Expulser systématiquement les étrangers en situation irrégulière" }
+    ],
+    "philippe": [
+      { "theme": "Immigration", "proposition": "Réduire l'immigration légale tout en maintenant une immigration choisie et contrôlée" },
+      { "theme": "Sécurité et Justice", "proposition": "Alourdir les peines pour crimes et délits violents, rétablir les peines planchers" },
+      { "theme": "Fiscalité", "proposition": "Réduire de 50 milliards d'euros les impôts de production sur cinq ans" },
+      { "theme": "Retraites", "proposition": "Reporter l'âge légal de départ à 65-67 ans" },
+      { "theme": "Énergie", "proposition": "Maintenir le nucléaire comme pilier central de la politique énergétique" },
+      { "theme": "Défense", "proposition": "Augmenter le budget militaire à 3% du PIB et soutenir davantage l'Ukraine" },
+      { "theme": "Europe", "proposition": "Rester fermement attaché à l'Union Européenne et à l'OTAN" },
+      { "theme": "Institutions", "proposition": "S'opposer à la proportionnelle aux législatives et à la VIe République" },
+      { "theme": "Travail", "proposition": "Augmenter la durée légale du travail au-delà de 35 heures" },
+      { "theme": "Social", "proposition": "Conditionner le RSA à des activités obligatoires" }
+    ],
+    "philippot": [
+      { "theme": "Immigration", "proposition": "Réduire drastiquement l'immigration légale et expulser systématiquement les étrangers en situation irrégulière" },
+      { "theme": "Europe", "proposition": "Sortie de l'Union européenne (Frexit), de l'euro, de Schengen, de la CEDH et de l'OTAN" },
+      { "theme": "Retraite", "proposition": "Revalorisation des petites retraites et opposition au relèvement de l'âge légal (60 ans)" },
+      { "theme": "Fiscalité", "proposition": "Augmenter les impôts sur les très grandes fortunes et rétablir l'ISF" },
+      { "theme": "Sécurité", "proposition": "Renforcer les peines pour crimes violents et augmenter les places de prison" },
+      { "theme": "Démocratie", "proposition": "Instaurer le référendum d'initiative citoyenne (RIC) et généraliser la représentation proportionnelle" },
+      { "theme": "Énergie", "proposition": "Maintenir et renforcer le nucléaire comme pilier de la politique énergétique" },
+      { "theme": "Services publics", "proposition": "Renationaliser les autoroutes et rétablir les monopoles publics dans le rail et l'énergie" },
+      { "theme": "Travail", "proposition": "Augmenter significativement le SMIC et préserver les protections du droit du travail" },
+      { "theme": "Environnement", "proposition": "Préserver les véhicules thermiques au-delà de 2035 et rejeter la fiscalité écologique punitive" }
+    ],
+    "retailleau": [
+      { "theme": "Immigration", "proposition": "Réduire significativement l'immigration légale et mettre fin au droit du sol automatique" },
+      { "theme": "Sécurité", "proposition": "Alourdir les peines pour crimes et délits violents, rétablir des peines planchers" },
+      { "theme": "Économie", "proposition": "S'opposer aux augmentations d'impôts sur les très grandes fortunes" },
+      { "theme": "Retraite", "proposition": "Maintenir l'âge légal de départ à la retraite à 64 ans" },
+      { "theme": "Énergie", "proposition": "Maintenir le nucléaire comme pilier de la politique énergétique" },
+      { "theme": "Social", "proposition": "Conditionner le RSA à 15 heures d'activité obligatoires par semaine" },
+      { "theme": "Défense", "proposition": "Soutenir militairement l'Ukraine et atteindre 3% du PIB pour la défense" },
+      { "theme": "Société", "proposition": "S'opposer à la légalisation du cannabis récréatif" },
+      { "theme": "Société", "proposition": "S'opposer à l'aide à mourir et à l'euthanasie" },
+      { "theme": "Éducation", "proposition": "Rendre l'uniforme scolaire obligatoire dans les écoles" }
+    ],
+    "ruffin": [
+      { "theme": "Fiscalité", "proposition": "Augmenter significativement les impôts sur les très grandes fortunes" },
+      { "theme": "Social", "proposition": "Abaisser l'âge légal de départ à la retraite à 60 ans avec 40 annuités de cotisation" },
+      { "theme": "Europe", "proposition": "Renégocier les traités européens en profondeur sans sortir de l'Union européenne" },
+      { "theme": "Démocratie", "proposition": "Introduire une part de représentation proportionnelle aux élections législatives" },
+      { "theme": "Travail", "proposition": "Augmenter significativement le SMIC à 1700 euros nets" },
+      { "theme": "Énergie", "proposition": "S'opposer à la relance nucléaire et développer les énergies renouvelables" },
+      { "theme": "Services publics", "proposition": "Défendre les services publics contre la marchandisation" },
+      { "theme": "Santé", "proposition": "Légaliser le cannabis récréatif sous le contrôle de l'État" },
+      { "theme": "Logement", "proposition": "Instaurer un contrôle strict des loyers dans les zones tendues" },
+      { "theme": "Institutions", "proposition": "Convoquer une Assemblée constituante pour une Sixième République" }
+    ],
+    "roussel": [
+      { "theme": "Fiscalité", "proposition": "Rétablissement et triplement de l'ISF avec renforcement de sa progressivité" },
+      { "theme": "Retraite", "proposition": "Rétablissement de la retraite à 60 ans à taux plein avec pension minimale de 1200€ nets" },
+      { "theme": "Emploi", "proposition": "Augmentation du SMIC à 1500€ nets mensuels et réduction de la semaine de travail à 32 heures" },
+      { "theme": "Énergie", "proposition": "Mix énergétique 100% public et 100% décarboné avec 50% nucléaire et 50% renouvelables" },
+      { "theme": "Services publics", "proposition": "Renforcement massif des services publics et recrutement de 500 000 fonctionnaires" },
+      { "theme": "OTAN", "proposition": "Sortie de la France de l'OTAN et demande de sa dissolution" },
+      { "theme": "Logement", "proposition": "Construction de 200 000 logements sociaux par an avec encadrement des loyers" },
+      { "theme": "Institutions", "proposition": "Passage à une VIe République avec primauté du Parlement et suppression de l'article 49.3" },
+      { "theme": "Économie", "proposition": "Nationalisation des secteurs stratégiques et investissement massif de 500 milliards d'euros sur 5 ans" },
+      { "theme": "Santé", "proposition": "Mise en place du 100% Sécu avec remboursement intégral des soins prescrits" }
+    ],
+    "tondelier": [
+      { "theme": "Immigration", "proposition": "Abroger les lois asile et immigration, autoriser les demandeurs d'asile à travailler" },
+      { "theme": "Fiscalité", "proposition": "Augmenter les impôts sur les très grandes fortunes via un ISF climatique de 10-15 milliards d'euros annuels" },
+      { "theme": "Retraites", "proposition": "Retour à la retraite à 62 ans avec possibilité de partir plus tôt pour les métiers pénibles" },
+      { "theme": "Europe", "proposition": "Renforcer l'Union européenne fédérale, s'opposer à toute sortie de l'UE" },
+      { "theme": "Énergie", "proposition": "Sortie du nucléaire, transition vers 100% d'énergies renouvelables" },
+      { "theme": "Emploi", "proposition": "Augmenter le SMIC à 1 600 euros nets en deux ans" },
+      { "theme": "Cannabis", "proposition": "Légalisation du cannabis encadrée par l'État" },
+      { "theme": "Défense", "proposition": "Soutien à l'Ukraine militairement, construction d'une défense européenne commune" },
+      { "theme": "Social", "proposition": "Instaurer un revenu universel de base" },
+      { "theme": "Environnement", "proposition": "Interdire progressivement les pesticides, l'élevage intensif, supprimer les subventions fossiles" }
+    ],
+    "zemmour": [
+      { "theme": "Immigration", "proposition": "Réduire l'immigration légale à zéro via suppression du regroupement familial et quasi-suppression du droit d'asile" },
+      { "theme": "Justice", "proposition": "Réinstaurer les peines planchers et rétablir la perpétuité réelle pour les crimes graves" },
+      { "theme": "Fiscalité", "proposition": "S'opposer à l'augmentation des impôts sur les grandes fortunes et réformer l'IFI" },
+      { "theme": "Retraites", "proposition": "Augmenter l'âge légal de la retraite à 64 ans d'ici 2030" },
+      { "theme": "Europe", "proposition": "Faire primer la loi nationale sur le droit européen sans quitter l'UE" },
+      { "theme": "Énergie", "proposition": "Construire 14 nouveaux réacteurs EPR et interdire les nouveaux projets éoliens" },
+      { "theme": "Défense", "proposition": "Porter le budget de défense à 3% du PIB" },
+      { "theme": "Sécurité", "proposition": "Créer 10 000 places de prison supplémentaires et abaisser la majorité pénale à 16 ans" },
+      { "theme": "Laïcité", "proposition": "Interdire les signes religieux ostensibles dans l'espace public" },
+      { "theme": "Immigration", "proposition": "Supprimer l'AME et conditionner les aides sociales à 10 ans de résidence légale" }
+    ]
+  }
+}
