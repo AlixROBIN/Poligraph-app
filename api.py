@@ -2118,14 +2118,14 @@ AGENT_TOOLS = [
         "function": {
             "name": "search_factchecks",
             "description": (
-                "Cherche parmi 817 fact-checks de politiciens français vérifiés par AFP Factuel, TF1 Info, Franceinfo, Le Monde… "
+                "Cherche parmi les fact-checks de politiciens français (AFP Factuel, TF1 Info, Franceinfo, Le Monde…). "
                 "Retourne les déclarations avec leur verdict (TRUE/FALSE/MISLEADING). "
-                "Utiliser pour répondre à des questions sur la véracité de propos tenus par des politiciens."
+                "Utiliser pour lister des fact-checks sur un politicien ou un thème."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "q":       {"type": "string", "description": "Texte à chercher dans la déclaration vérifiée"},
+                    "q":       {"type": "string", "description": "Mots-clés dans la déclaration vérifiée ou le nom du politicien"},
                     "verdict": {
                         "type": "string",
                         "enum": ["TRUE", "MOSTLY_TRUE", "HALF_TRUE", "MISLEADING",
@@ -2136,6 +2136,27 @@ AGENT_TOOLS = [
                     "limit":   {"type": "integer", "description": "Nombre de résultats (défaut 10, max 30)"},
                 },
                 "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "explain_factcheck",
+            "description": (
+                "Répond à une question précise sur un fait vérifié grâce à un modèle NLP extractif français (CamemBERT QA). "
+                "Cherche les fact-checks pertinents et extrait la PHRASE EXACTE du corpus qui répond à la question. "
+                "À utiliser quand l'utilisateur demande POURQUOI un propos est faux/vrai, "
+                "ou veut une explication précise sur une déclaration vérifiée d'un politicien."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question":   {"type": "string",  "description": "La question précise (ex: 'Pourquoi cette déclaration est-elle fausse ?', 'Quelle preuve montre que X a menti sur Y ?')"},
+                    "politician": {"type": "string",  "description": "Nom du politicien pour filtrer (optionnel, ex: 'Bardella', 'Le Pen')"},
+                    "limit":      {"type": "integer", "description": "Nombre de fact-checks à analyser (défaut 5, max 10)"},
+                },
+                "required": ["question"],
             },
         },
     },
@@ -2401,16 +2422,35 @@ def _tool_semantic_search(query: str = "", source: str = "all", limit: int = 8) 
 
 
 def _tool_search_factchecks(q: str = "", verdict: str = "", source: str = "", limit: int = 10) -> dict:
-    """Cherche dans les 817 fact-checks via l'API poligraph.fr."""
-    import ast as _ast
+    """
+    Cherche dans le corpus complet de fact-checks (recherche locale tokenisée).
+    Normalise les accents — trouve 'Barnier retraites' même sans accent.
+    """
+    import unicodedata, re as _re, ast as _ast
+
+    def _norm(s):
+        return ''.join(c for c in unicodedata.normalize("NFD", (s or "").lower())
+                       if unicodedata.category(c) != "Mn")
     try:
-        params: dict = {"limit": min(int(limit), 30), "page": 1}
-        if q:       params["search"] = q
-        if verdict: params["verdictRating"] = verdict
-        if source:  params["source"] = source
-        data  = _pg("factchecks", params)
-        items = data.get("data") or []
-        pag   = data.get("pagination") or {}
+        items = _all_factchecks_cached()
+        if verdict: items = [fc for fc in items if fc.get("verdictRating") == verdict]
+        if source:  items = [fc for fc in items if (fc.get("source") or "") == source]
+
+        if q:
+            tokens = [t for t in _re.split(r'\s+', _norm(q).strip()) if len(t) > 1]
+
+            def _score(fc):
+                parts = [fc.get("claimText") or "", fc.get("claimant") or ""]
+                for p in (fc.get("politicians") or []):
+                    parts.append(p.get("fullName") or "")
+                text = _norm(" ".join(parts))
+                return sum(2 if tok in text else 0 for tok in tokens)
+
+            scored = sorted([(fc, _score(fc)) for fc in items], key=lambda x: -x[1])
+            items  = [fc for fc, s in scored if s > 0][:min(int(limit), 30)]
+        else:
+            items = sorted(items, key=lambda fc: fc.get("publishedAt") or "", reverse=True)[:int(limit)]
+
         results = []
         for fc in items:
             pols = fc.get("politicians") or []
@@ -2418,16 +2458,101 @@ def _tool_search_factchecks(q: str = "", verdict: str = "", source: str = "", li
                 try: pols = _ast.literal_eval(pols)
                 except Exception: pols = []
             results.append({
-                "déclaration": (fc.get("claimText") or "")[:200],
+                "déclaration": (fc.get("claimText") or "")[:250],
                 "verdict":     fc.get("verdictRating"),
                 "source":      fc.get("source"),
                 "date":        (fc.get("publishedAt") or "")[:10],
                 "url":         fc.get("sourceUrl") or "",
                 "politiciens": [p.get("fullName") for p in pols if isinstance(p, dict) and p.get("fullName")],
             })
-        return {"total": pag.get("total", len(results)), "résultats": results}
+        return {"total": len(results), "résultats": results}
     except Exception as e:
         return {"erreur": str(e), "résultats": []}
+
+
+def _tool_explain_factcheck(question: str, politician: str = "", limit: int = 5) -> dict:
+    """
+    Répond à une question précise sur des fact-checks via CamemBERT QA.
+    1. Cherche les FC pertinents (question + politicien)
+    2. Construit un contexte texte
+    3. Le modèle extractif trouve la phrase exacte qui répond
+    """
+    import unicodedata, re as _re, ast as _ast
+
+    def _norm(s):
+        return ''.join(c for c in unicodedata.normalize("NFD", (s or "").lower())
+                       if unicodedata.category(c) != "Mn")
+
+    q_combined = f"{politician} {question}".strip()
+    tokens = [t for t in _re.split(r'\s+', _norm(q_combined)) if len(t) > 1]
+
+    all_fc = _all_factchecks_cached()
+
+    def _score(fc):
+        parts = [fc.get("claimText") or "", fc.get("claimant") or ""]
+        for p in (fc.get("politicians") or []):
+            parts.append(p.get("fullName") or "")
+        text = _norm(" ".join(parts))
+        return sum(2 if tok in text else 0 for tok in tokens)
+
+    scored = sorted([(fc, _score(fc)) for fc in all_fc], key=lambda x: -x[1])
+    # Prend plus de candidats pour re-ranker ensuite avec Granite
+    candidates = [fc for fc, s in scored if s > 0][:min(int(limit) * 3, 30)]
+
+    if not candidates:
+        return {
+            "réponse_extraite": None,
+            "confiance": 0.0,
+            "fact_checks": [],
+            "message": "Aucun fact-check trouvé pour cette question.",
+        }
+
+    # ── Re-ranking sémantique avec Granite (si HF disponible) ────────────────
+    # Granite comprend le SENS → reclasse les candidats TF-IDF par vraie proximité
+    texts_to_embed = [question] + [(fc.get("claimText") or "")[:300] for fc in candidates]
+    embs = _hf_embed(texts_to_embed)
+    if embs and len(embs) == len(texts_to_embed):
+        q_emb    = np.array(embs[0]).reshape(1, -1)
+        doc_embs = np.array(embs[1:])
+        sims     = cosine_similarity(q_emb, doc_embs).flatten()
+        reranked = sorted(zip(candidates, sims.tolist()), key=lambda x: -x[1])
+        top_fcs  = [fc for fc, _ in reranked[:min(int(limit), 10)]]
+        logger.debug(f"[Embed] Re-ranking Granite : {len(candidates)} → {len(top_fcs)} candidats")
+    else:
+        top_fcs = candidates[:min(int(limit), 10)]
+
+    # Contexte pour le modèle QA — concaténation des déclarations + verdicts
+    parts = []
+    for fc in top_fcs:
+        v    = fc.get("verdictRating", "?")
+        src  = fc.get("source", "?")
+        date = (fc.get("publishedAt") or "")[:10]
+        txt  = (fc.get("claimText") or "")[:300]
+        parts.append(f"[{v}] {src} ({date}) : {txt}")
+    context = " | ".join(parts)[:3000]
+
+    qa = _hf_qa_extract(question, context)
+
+    fc_list = []
+    for fc in top_fcs:
+        pols = fc.get("politicians") or []
+        if isinstance(pols, str):
+            try: pols = _ast.literal_eval(pols)
+            except Exception: pols = []
+        fc_list.append({
+            "déclaration": (fc.get("claimText") or "")[:250],
+            "verdict":     fc.get("verdictRating"),
+            "source":      fc.get("source"),
+            "date":        (fc.get("publishedAt") or "")[:10],
+            "url":         fc.get("sourceUrl") or "",
+            "politiciens": [p.get("fullName") for p in pols if isinstance(p, dict)],
+        })
+
+    return {
+        "réponse_extraite": qa["answer"] or None,
+        "confiance":        qa["score"],
+        "fact_checks":      fc_list,
+    }
 
 
 def _execute_agent_tool(tool_name: str, tool_input: dict) -> dict:
@@ -2440,6 +2565,7 @@ def _execute_agent_tool(tool_name: str, tool_input: dict) -> dict:
         "analyze_political_figure": _tool_analyze_political_figure,
         "search_factchecks":       _tool_search_factchecks,
         "semantic_search":         _tool_semantic_search,
+        "explain_factcheck":       _tool_explain_factcheck,
     }
     fn = dispatch.get(tool_name)
     if fn is None:
@@ -2493,9 +2619,15 @@ RN · LR · LFI · RE · PS · EELV · HOR · MoDem · NFP · UDI · PCF
 **Pour des votes sur un thème :**
 → `search_votes(q="budget", limit=10)` ou `search_votes(q="agriculture")`
 
-**Pour vérifier si un propos est vrai/faux :**
+**Pour vérifier si un propos est vrai/faux (lister les fact-checks) :**
 → `search_factchecks(q="immigration", limit=10)` ou `search_factchecks(verdict="FALSE", limit=20)`
 → Pour chercher les mensonges d'un parti : `search_factchecks(q="[nom du parti]", verdict="FALSE")`
+
+**Pour expliquer POURQUOI un propos est faux/vrai (question précise sur un fait) :**
+→ `explain_factcheck(question="Pourquoi cette déclaration est-elle fausse ?", politician="Bardella")`
+→ Utilise un modèle NLP extractif français (CamemBERT QA) + re-ranking sémantique Granite
+→ Retourne la PHRASE EXACTE du corpus qui répond à la question — plus précis que search_factchecks
+→ À utiliser quand l'utilisateur demande une explication, une preuve, ou un "pourquoi"
 
 **Pour une recherche sémantique (mots-clés inexacts, requête conceptuelle) :**
 → `semantic_search(query="affaires de corruption liées à des marchés publics")` — trouve par similarité
@@ -2528,6 +2660,78 @@ _GROQ_MODEL   = os.getenv("GROQ_MODEL",   "llama-3.3-70b-versatile")
 _OLLAMA_URL   = os.getenv("OLLAMA_URL",   "http://localhost:11434")
 _OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 _CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-4-8")
+
+# ── Modèles NLP HuggingFace ───────────────────────────────────────────────
+_HF_API_KEY    = os.getenv("HF_API_KEY", "")
+# QA extractif (CamemBERT français) — extrait la phrase qui répond à une question
+_HF_QA_MODEL   = os.getenv("HF_QA_MODEL",    "cmarkea/distilcamembert-base-qa")
+_HF_QA_URL     = f"https://api-inference.huggingface.co/models/{_HF_QA_MODEL}"
+# Embeddings sémantiques multilingues — comprend le sens, pas seulement les mots
+_HF_EMBED_MODEL = os.getenv("HF_EMBED_MODEL", "ibm-granite/granite-embedding-311m-multilingual-r2")
+_HF_EMBED_URL   = f"https://api-inference.huggingface.co/models/{_HF_EMBED_MODEL}"
+
+
+def _hf_embed(texts: list) -> "list | None":
+    """
+    Embeddings sémantiques via Granite 311M (HF Inference API).
+    Comprend le sens d'une phrase, pas seulement les mots-clés.
+    Retourne une liste de vecteurs flottants, None si indisponible.
+    """
+    if not _HF_API_KEY or not texts:
+        return None
+    try:
+        all_embs: list = []
+        for i in range(0, len(texts), 32):
+            batch = [str(t)[:512] for t in texts[i:i + 32]]
+            resp  = http_requests.post(
+                _HF_EMBED_URL,
+                headers={"Authorization": f"Bearer {_HF_API_KEY}"},
+                json={"inputs": batch},
+                timeout=30,
+            )
+            if resp.status_code == 503:
+                logger.warning("[Embed] Granite en cold start")
+                return None
+            if resp.status_code != 200:
+                logger.warning(f"[Embed] API erreur {resp.status_code}: {resp.text[:100]}")
+                return None
+            data = resp.json()
+            # Certains modèles retournent [n, seq_len, dim] (token-level) → mean pool
+            if data and isinstance(data[0][0], list):
+                data = [list(np.mean(vecs, axis=0)) for vecs in data]
+            all_embs.extend(data)
+        return all_embs
+    except Exception as exc:
+        logger.warning(f"[Embed] Échec : {exc}")
+        return None
+
+
+def _hf_qa_extract(question: str, context: str) -> dict:
+    """
+    Extraction de réponse via CamemBERT QA (HuggingFace Inference API).
+    Prend une question + un contexte, retourne la phrase exacte qui répond.
+    Retourne {"answer": str, "score": float} — answer="" si indisponible.
+    """
+    if not _HF_API_KEY or not context.strip() or not question.strip():
+        return {"answer": "", "score": 0.0}
+    try:
+        resp = http_requests.post(
+            _HF_QA_URL,
+            headers={"Authorization": f"Bearer {_HF_API_KEY}"},
+            json={"inputs": {"question": question[:500], "context": context[:3000]}},
+            timeout=25,
+        )
+        if resp.status_code == 503:
+            logger.warning("[QA] Modèle en cold start — réponse vide")
+            return {"answer": "", "score": 0.0}
+        if resp.status_code == 200:
+            d = resp.json()
+            return {"answer": d.get("answer", ""), "score": round(d.get("score", 0.0), 3)}
+        logger.warning(f"[QA] API erreur {resp.status_code}: {resp.text[:100]}")
+        return {"answer": "", "score": 0.0}
+    except Exception as exc:
+        logger.warning(f"[QA] Échec : {exc}")
+        return {"answer": "", "score": 0.0}
 
 # ── Cache texte Ollama (en mémoire, survit au lifetime du process) ──
 _ollama_txt_cache: dict[str, str] = {}

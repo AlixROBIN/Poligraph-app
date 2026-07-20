@@ -174,9 +174,20 @@ function PoliticianFcPanel({ politician, onClose, onSelectFc }) {
         <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#1a2e5a" }}>
           {politician.name}
         </h3>
-        <p style={{ margin: "0 0 1.2rem", fontSize: 12, color: "#888" }}>
-          {politician.party} · {politician.nb_déclarations} déclarations vérifiées
-        </p>
+        <div style={{ margin: "0 0 1.2rem", display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: "#888" }}>{politician.party}</span>
+          {politician.nb_déclarations != null && (
+            <span style={{ fontSize: 11, background: "#eaf0ff", color: "#1a3a6e", borderRadius: 8, padding: "2px 8px" }}>
+              {politician.nb_déclarations} déclaration{politician.nb_déclarations > 1 ? "s" : ""} faite{politician.nb_déclarations > 1 ? "s" : ""} par lui
+            </span>
+          )}
+          {politician.nb_mentions != null && politician.nb_mentions > 0 && (
+            <span style={{ fontSize: 11, background: "#f5f0ff", color: "#8e44ad", borderRadius: 8, padding: "2px 8px" }}>
+              {politician.nb_mentions} mention{politician.nb_mentions > 1 ? "s" : ""} par d'autres
+            </span>
+          )}
+          <span style={{ fontSize: 11, color: "#aaa" }}>— liste ci-dessous : toutes apparitions</span>
+        </div>
 
         {loading && <p style={{ color: "#aaa", textAlign: "center", padding: "2rem 0" }}>Chargement…</p>}
         {!loading && (!fcs || fcs.length === 0) && (
