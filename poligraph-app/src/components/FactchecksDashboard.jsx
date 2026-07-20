@@ -1,17 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 const BASE = (process.env.REACT_APP_API_URL || "http://localhost:8000") + "/api";
 
-// Biais éditoriaux connus des sources françaises
 const SOURCE_BIAS = {
-  "TF1 Info":           { lean: "Centre-droite", party: "—",  color: "#e67e22", owner: "Bouygues" },
-  "AFP Factuel":        { lean: "Neutre",         party: "—",  color: "#27ae60", owner: "Agence publique" },
-  "Franceinfo":         { lean: "Neutre",         party: "—",  color: "#2980b9", owner: "Service public (État)" },
-  "20 Minutes":         { lean: "Centre",         party: "—",  color: "#8e44ad", owner: "Rossel" },
-  "Le Monde":           { lean: "Centre-gauche",  party: "PS/EELV", color: "#2c3e50", owner: "Xavier Niel / Matthieu Pigasse" },
-  "Libération":         { lean: "Centre-gauche",  party: "PS", color: "#e74c3c", owner: "Altice (Drahi)" },
-  "Le Dauphiné Libéré": { lean: "Centre",         party: "—",  color: "#16a085", owner: "EBRA (Crédit Mutuel)" },
-  "DE FACTO":           { lean: "Indépendant",    party: "—",  color: "#7f8c8d", owner: "ONG journaliste" },
+  "TF1 Info":           { lean: "Centre-droite", color: "#e67e22", owner: "Bouygues" },
+  "AFP Factuel":        { lean: "Neutre",         color: "#27ae60", owner: "Agence publique" },
+  "Franceinfo":         { lean: "Neutre",         color: "#2980b9", owner: "Service public (État)" },
+  "20 Minutes":         { lean: "Centre",         color: "#8e44ad", owner: "Rossel" },
+  "Le Monde":           { lean: "Centre-gauche",  color: "#2c3e50", owner: "Xavier Niel / Matthieu Pigasse" },
+  "Libération":         { lean: "Centre-gauche",  color: "#e74c3c", owner: "Altice (Drahi)" },
+  "Le Dauphiné Libéré": { lean: "Centre",         color: "#16a085", owner: "EBRA (Crédit Mutuel)" },
+  "DE FACTO":           { lean: "Indépendant",    color: "#7f8c8d", owner: "ONG journaliste" },
 };
 
 const VERDICT_COLORS = {
@@ -21,6 +20,208 @@ const VERDICT_COLORS = {
   invefi:   "#95a5a6",
 };
 
+const VERDICT_LABELS = {
+  TRUE:          { label: "Vrai",           color: "#27ae60", bg: "#eafaf1" },
+  MOSTLY_TRUE:   { label: "Plutôt vrai",    color: "#2ecc71", bg: "#f0faf4" },
+  HALF_TRUE:     { label: "Mi-vrai",        color: "#f39c12", bg: "#fef9e7" },
+  MISLEADING:    { label: "Trompeur",       color: "#e67e22", bg: "#fdf2e9" },
+  FALSE:         { label: "Faux",           color: "#e74c3c", bg: "#fdedec" },
+  MOSTLY_FALSE:  { label: "Plutôt faux",    color: "#c0392b", bg: "#fde8e6" },
+  UNVERIFIABLE:  { label: "Invérifiable",   color: "#95a5a6", bg: "#f2f3f4" },
+};
+
+function verdictCfg(rating) {
+  return VERDICT_LABELS[rating] || { label: rating || "?", color: "#888", bg: "#f5f5f5" };
+}
+
+// ── Modal détail d'un fact-check ──────────────────────────────────────────────
+function FactCheckModal({ fc, onClose }) {
+  if (!fc) return null;
+  const cfg  = verdictCfg(fc.verdictRating);
+  const pols = (fc.politicians || []).map(p => p?.fullName).filter(Boolean);
+  const date = fc.publishedAt ? new Date(fc.publishedAt).toLocaleDateString("fr-FR") : "";
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 1000, padding: 16,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: "#fff", borderRadius: 16, padding: "2rem",
+          maxWidth: 640, width: "100%", boxShadow: "0 8px 40px rgba(0,0,0,0.2)",
+          position: "relative", maxHeight: "85vh", overflowY: "auto",
+        }}
+      >
+        <button
+          onClick={onClose}
+          style={{
+            position: "absolute", top: 14, right: 16, border: "none",
+            background: "none", fontSize: 22, cursor: "pointer", color: "#aaa",
+          }}
+        >✕</button>
+
+        {/* Verdict */}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: "1.2rem", flexWrap: "wrap" }}>
+          <span style={{
+            background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}55`,
+            borderRadius: 12, padding: "4px 14px", fontSize: 13, fontWeight: 800,
+          }}>
+            {cfg.label}
+          </span>
+          <span style={{ fontSize: 12, color: "#888" }}>{fc.source}</span>
+          <span style={{ fontSize: 12, color: "#aaa", marginLeft: "auto" }}>{date}</span>
+        </div>
+
+        {/* Déclaration */}
+        <p style={{
+          fontSize: 15, fontWeight: 700, color: "#1a2e5a", lineHeight: 1.6,
+          margin: "0 0 1rem", borderLeft: `4px solid ${cfg.color}`,
+          paddingLeft: 14,
+        }}>
+          « {fc.claimText || "Déclaration non renseignée"} »
+        </p>
+
+        {/* Qui a dit ça */}
+        {fc.claimant && (
+          <p style={{ fontSize: 13, color: "#555", margin: "0 0 6px" }}>
+            <strong>Déclarant :</strong> {fc.claimant}
+          </p>
+        )}
+        {pols.length > 0 && (
+          <p style={{ fontSize: 13, color: "#555", margin: "0 0 1rem" }}>
+            <strong>Politicien(s) impliqué(s) :</strong>{" "}
+            {pols.join(", ")}
+          </p>
+        )}
+
+        {/* Explication fournie par le média */}
+        {fc.articleTitle && (
+          <div style={{
+            background: "#f8f9fc", borderRadius: 10, padding: "12px 14px",
+            marginBottom: "1rem", fontSize: 13, color: "#444", lineHeight: 1.6,
+          }}>
+            <strong style={{ color: "#1a2e5a" }}>Titre de l'article :</strong>
+            <p style={{ margin: "4px 0 0" }}>{fc.articleTitle}</p>
+          </div>
+        )}
+
+        {/* Lien externe */}
+        {fc.sourceUrl && (
+          <a
+            href={fc.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: "inline-block", marginTop: 8,
+              padding: "9px 22px", borderRadius: 8,
+              background: "#1a3a6e", color: "#fff",
+              textDecoration: "none", fontWeight: 700, fontSize: 13,
+            }}
+          >
+            Lire l'analyse complète → {fc.source}
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Panel fact-checks d'un politicien ────────────────────────────────────────
+function PoliticianFcPanel({ politician, onClose, onSelectFc }) {
+  const [fcs,     setFcs]     = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!politician?.slug) return;
+    setLoading(true);
+    fetch(`${BASE}/proxy/politiques/${politician.slug}/factchecks?limit=50`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setFcs(d?.data || []))
+      .catch(() => setFcs([]))
+      .finally(() => setLoading(false));
+  }, [politician?.slug]);
+
+  if (!politician) return null;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 1000, padding: 16,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: "#fff", borderRadius: 16, padding: "2rem",
+          maxWidth: 700, width: "100%", boxShadow: "0 8px 40px rgba(0,0,0,0.2)",
+          position: "relative", maxHeight: "85vh", overflowY: "auto",
+        }}
+      >
+        <button
+          onClick={onClose}
+          style={{ position: "absolute", top: 14, right: 16, border: "none", background: "none", fontSize: 22, cursor: "pointer", color: "#aaa" }}
+        >✕</button>
+
+        <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#1a2e5a" }}>
+          {politician.name}
+        </h3>
+        <p style={{ margin: "0 0 1.2rem", fontSize: 12, color: "#888" }}>
+          {politician.party} · {politician.nb_déclarations} déclarations vérifiées
+        </p>
+
+        {loading && <p style={{ color: "#aaa", textAlign: "center", padding: "2rem 0" }}>Chargement…</p>}
+        {!loading && (!fcs || fcs.length === 0) && (
+          <p style={{ color: "#aaa", textAlign: "center", padding: "2rem 0" }}>Aucun fact-check trouvé.</p>
+        )}
+        {!loading && fcs && fcs.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {fcs.map((fc, i) => {
+              const cfg  = verdictCfg(fc.verdictRating);
+              const date = fc.publishedAt ? new Date(fc.publishedAt).toLocaleDateString("fr-FR") : "";
+              return (
+                <div
+                  key={i}
+                  onClick={() => onSelectFc(fc)}
+                  style={{
+                    padding: "12px 14px", borderRadius: 10, border: "1px solid #e8ecf8",
+                    background: "#fafbfe", cursor: "pointer", transition: "box-shadow 0.15s",
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,0,0,0.10)"}
+                  onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}
+                >
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
+                    <span style={{
+                      background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}55`,
+                      borderRadius: 12, padding: "2px 10px", fontSize: 11, fontWeight: 700,
+                    }}>
+                      {cfg.label}
+                    </span>
+                    <span style={{ fontSize: 11, color: "#888" }}>{fc.source}</span>
+                    <span style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}>{date}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: "#1a2e5a", lineHeight: 1.5 }}>
+                    « {(fc.claimText || "").slice(0, 180)}{(fc.claimText || "").length > 180 ? "…" : ""} »
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Barre de verdict ──────────────────────────────────────────────────────────
 function VerdictBar({ s }) {
   if (!s) return null;
   const total = s.vrai + s.trompeur + s.faux + s.invefi;
@@ -35,6 +236,7 @@ function VerdictBar({ s }) {
   );
 }
 
+// ── Carte de classement ───────────────────────────────────────────────────────
 function RankingCard({ title, subtitle, items, metric, color, onClickPolitician }) {
   return (
     <div style={{
@@ -54,8 +256,14 @@ function RankingCard({ title, subtitle, items, metric, color, onClickPolitician 
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
               <div>
                 <span style={{ fontSize: 13, fontWeight: 700, color: "#1a2e5a" }}>{p.name}</span>
-                {p.party && <span style={{ fontSize: 11, color: "#888", marginLeft: 6 }}>{p.party} · {p.total} fact-checks</span>}
-                {p.short && <span style={{ fontSize: 11, color: "#888", marginLeft: 6 }}>{p.total} fact-checks</span>}
+                {p.party && <span style={{ fontSize: 11, color: "#888", marginLeft: 6 }}>{p.party} · {p.total} FC</span>}
+                {p.short && <span style={{ fontSize: 11, color: "#888", marginLeft: 6 }}>{p.total} FC</span>}
+                {p.total < 8 && (
+                  <span title="Faible nombre de vérifications — score moins représentatif" style={{
+                    marginLeft: 6, fontSize: 10, color: "#e67e22",
+                    border: "1px solid #e67e2266", borderRadius: 8, padding: "0 5px",
+                  }}>⚠ petit échantillon</span>
+                )}
               </div>
               <span style={{ fontSize: 14, fontWeight: 800, color }}>{p[metric]}%</span>
             </div>
@@ -67,21 +275,12 @@ function RankingCard({ title, subtitle, items, metric, color, onClickPolitician 
   );
 }
 
-const VERDICT_LABELS = {
-  TRUE:          { label: "Vrai",           color: "#27ae60", bg: "#eafaf1" },
-  MOSTLY_TRUE:   { label: "Plutôt vrai",    color: "#2ecc71", bg: "#f0faf4" },
-  HALF_TRUE:     { label: "Mi-vrai",        color: "#f39c12", bg: "#fef9e7" },
-  MISLEADING:    { label: "Trompeur",       color: "#e67e22", bg: "#fdf2e9" },
-  FALSE:         { label: "Faux",           color: "#e74c3c", bg: "#fdedec" },
-  MOSTLY_FALSE:  { label: "Plutôt faux",    color: "#c0392b", bg: "#fde8e6" },
-  UNVERIFIABLE:  { label: "Invérifiable",   color: "#95a5a6", bg: "#f2f3f4" },
-};
-
-function SearchTab() {
-  const [query,        setQuery]        = useState("");
-  const [verdictFilter,setVerdictFilter] = useState("");
-  const [results,      setResults]      = useState(null);
-  const [searching,    setSearching]    = useState(false);
+// ── Onglet Recherche ──────────────────────────────────────────────────────────
+function SearchTab({ onSelectFc }) {
+  const [query,         setQuery]         = useState("");
+  const [verdictFilter, setVerdictFilter] = useState("");
+  const [results,       setResults]       = useState(null);
+  const [searching,     setSearching]     = useState(false);
 
   const doSearch = () => {
     setSearching(true);
@@ -99,7 +298,6 @@ function SearchTab() {
     <div style={{ background: "#fff", borderRadius: 14, padding: "1.4rem", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", border: "1px solid #e8ecf8" }}>
       <h3 style={{ margin: "0 0 1rem", fontSize: 15, color: "#1a2e5a" }}>Rechercher un fact-check</h3>
 
-      {/* Filtres */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: "1rem" }}>
         <input
           value={query}
@@ -127,7 +325,6 @@ function SearchTab() {
         </button>
       </div>
 
-      {/* Résultats */}
       {results === null && (
         <p style={{ color: "#aaa", fontSize: 13, textAlign: "center", padding: "2rem 0" }}>
           Entrez un mot-clé et appuyez sur Chercher
@@ -140,13 +337,22 @@ function SearchTab() {
       )}
       {results !== null && results.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <p style={{ margin: "0 0 6px", fontSize: 12, color: "#888" }}>{results.length} résultat(s)</p>
+          <p style={{ margin: "0 0 6px", fontSize: 12, color: "#888" }}>
+            {results.length} résultat(s) — cliquer pour voir l'analyse avant d'accéder à la source
+          </p>
           {results.map((fc, i) => {
-            const cfg = VERDICT_LABELS[fc.verdictRating] || { label: fc.verdictRating, color: "#888", bg: "#f5f5f5" };
+            const cfg  = verdictCfg(fc.verdictRating);
             const pols = (fc.politicians || []).map(p => p?.fullName).filter(Boolean);
+            const date = fc.publishedAt ? new Date(fc.publishedAt).toLocaleDateString("fr-FR") : "";
             return (
-              <a key={i} href={fc.sourceUrl} target="_blank" rel="noreferrer"
-                style={{ display: "block", textDecoration: "none", color: "inherit", padding: "12px 14px", borderRadius: 10, border: "1px solid #e8ecf8", background: "#fafbfe", transition: "box-shadow 0.15s" }}
+              <div
+                key={i}
+                onClick={() => onSelectFc(fc)}
+                style={{
+                  display: "block", padding: "12px 14px", borderRadius: 10,
+                  border: "1px solid #e8ecf8", background: "#fafbfe",
+                  cursor: "pointer", transition: "box-shadow 0.15s",
+                }}
                 onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,0,0,0.10)"}
                 onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}
               >
@@ -156,14 +362,12 @@ function SearchTab() {
                   </span>
                   <span style={{ fontSize: 11, color: "#888" }}>{fc.source}</span>
                   {pols.length > 0 && <span style={{ fontSize: 11, color: "#8e44ad", fontWeight: 600 }}>{pols.join(", ")}</span>}
-                  <span style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}>
-                    {fc.publishedAt ? new Date(fc.publishedAt).toLocaleDateString("fr-FR") : ""}
-                  </span>
+                  <span style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}>{date}</span>
                 </div>
                 <div style={{ fontSize: 13, color: "#1a2e5a", lineHeight: 1.5 }}>
                   « {(fc.claimText || "").slice(0, 200)}{(fc.claimText || "").length > 200 ? "…" : ""} »
                 </div>
-              </a>
+              </div>
             );
           })}
         </div>
@@ -172,10 +376,21 @@ function SearchTab() {
   );
 }
 
+// ── Composant principal ───────────────────────────────────────────────────────
 export default function FactchecksDashboard({ onNavigate }) {
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab,     setTab]     = useState("factchecks");
+
+  // Modals
+  const [selectedFc,  setSelectedFc]  = useState(null);
+  const [selectedPol, setSelectedPol] = useState(null);
+
+  const openPol = useCallback((p) => { setSelectedPol(p); setSelectedFc(null); }, []);
+  const openFc  = useCallback((fc) => { setSelectedFc(fc); }, []);
+  const closeFc = useCallback(() => setSelectedFc(null), []);
+  const closePol = useCallback(() => setSelectedPol(null), []);
+  const openFcFromPol = useCallback((fc) => setSelectedFc(fc), []);
 
   useEffect(() => {
     fetch(`${BASE}/dashboard/factchecks`)
@@ -187,14 +402,26 @@ export default function FactchecksDashboard({ onNavigate }) {
 
   const go = (filters) => onNavigate("exploration", { tab: "factchecks", ...filters });
 
-  if (loading) return <p style={{ padding: "2rem", color: "#888" }}>Chargement des {817} fact-checks… (~10s première fois)</p>;
+  if (loading) return <p style={{ padding: "2rem", color: "#888" }}>Chargement des fact-checks… (~10s première fois)</p>;
   if (!data)   return <p style={{ padding: "2rem", color: "red" }}>Impossible de charger le dashboard fact-checks.</p>;
 
-  const ov = data.verdicts_globaux || {};
+  const ov    = data.verdicts_globaux || {};
   const total = data.total || 0;
 
   return (
     <div style={{ padding: "1.5rem", background: "#f5f6fa", minHeight: "100vh" }}>
+
+      {/* Modals */}
+      {selectedPol && !selectedFc && (
+        <PoliticianFcPanel
+          politician={selectedPol}
+          onClose={closePol}
+          onSelectFc={openFcFromPol}
+        />
+      )}
+      {selectedFc && (
+        <FactCheckModal fc={selectedFc} onClose={closeFc} />
+      )}
 
       {/* Header */}
       <div style={{
@@ -235,18 +462,18 @@ export default function FactchecksDashboard({ onNavigate }) {
         <>
           <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem" }}>
             <RankingCard
-              title="Déclarations les plus vraies"
-              subtitle="Sur les propos tenus PAR le politicien (≥3 fact-checks de ses propres déclarations)"
+              title="Politiciens les plus fiables"
+              subtitle="Score net lissé : propos vrais − faux (sur déclarations du politicien, ≥3 FC). Cliquer pour voir les fact-checks."
               items={data.most_reliable || []}
               metric="pct_vrai" color="#27ae60"
-              onClickPolitician={p => onNavigate("annuaire", { q: p.name })}
+              onClickPolitician={openPol}
             />
             <RankingCard
-              title="Déclarations les plus fausses"
-              subtitle="Sur les propos tenus PAR le politicien — ne tient pas compte de ce que d'autres disent sur lui"
+              title="Politiciens les moins fiables"
+              subtitle="Score net lissé le plus bas (même méthode) — un politicien ne peut pas être dans les deux listes."
               items={data.least_reliable || []}
               metric="pct_faux" color="#e74c3c"
-              onClickPolitician={p => onNavigate("annuaire", { q: p.name })}
+              onClickPolitician={openPol}
             />
           </div>
 
@@ -255,12 +482,12 @@ export default function FactchecksDashboard({ onNavigate }) {
             <div style={{ background: "#fff", borderRadius: 14, padding: "1.4rem", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", border: "1px solid #e8ecf8", marginBottom: "1.5rem" }}>
               <h3 style={{ margin: "0 0 4px", fontSize: 15, color: "#1a2e5a" }}>Politiciens les plus impliqués</h3>
               <p style={{ margin: "0 0 1rem", fontSize: 11, color: "#aaa" }}>
-                Toutes apparitions confondues — déclarations faites par eux + déclarations d'autres à leur sujet
+                Toutes apparitions confondues — déclarations faites par eux + mentions par d'autres. Cliquer pour voir leurs fact-checks.
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {(data.most_mentioned || []).map((p, i) => (
                   <div key={i}
-                    onClick={() => onNavigate("annuaire", { q: p.name })}
+                    onClick={() => openPol(p)}
                     style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "6px 0", borderBottom: "1px solid #f5f5f5" }}
                     onMouseEnter={e => e.currentTarget.style.opacity = "0.7"}
                     onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
@@ -304,15 +531,6 @@ export default function FactchecksDashboard({ onNavigate }) {
                 </div>
               ))}
             </div>
-            {/* Légende */}
-            <div style={{ display: "flex", gap: 16, marginTop: 14, fontSize: 11, flexWrap: "wrap" }}>
-              {Object.entries(VERDICT_COLORS).map(([k, c]) => (
-                <div key={k} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: 2, background: c }} />
-                  <span style={{ color: "#555", textTransform: "capitalize" }}>{k}</span>
-                </div>
-              ))}
-            </div>
           </div>
         </>
       )}
@@ -322,14 +540,14 @@ export default function FactchecksDashboard({ onNavigate }) {
         <div style={{ display: "flex", gap: "1rem" }}>
           <RankingCard
             title="Partis les plus fiables"
-            subtitle="Par proportion de propos vérifiés vrais (≥5 fact-checks)"
+            subtitle="Score net lissé (vrai − faux sur déclarations des membres, ≥3 FC). Tri unique — un parti ne peut pas être dans les deux listes."
             items={(data.most_reliable_p || []).map(p => ({ ...p, name: p.short + " – " + p.name }))}
             metric="pct_vrai" color="#27ae60"
             onClickPolitician={p => go({ q: p.short })}
           />
           <RankingCard
             title="Partis les moins fiables"
-            subtitle="Par proportion de propos vérifiés faux (≥5 fact-checks)"
+            subtitle="Score net lissé le plus bas — proportion de faux la plus élevée avec pondération du volume."
             items={(data.least_reliable_p || []).map(p => ({ ...p, name: p.short + " – " + p.name }))}
             metric="pct_faux" color="#e74c3c"
             onClickPolitician={p => go({ q: p.short })}
@@ -338,7 +556,7 @@ export default function FactchecksDashboard({ onNavigate }) {
       )}
 
       {/* ── Onglet Recherche ── */}
-      {tab === "search" && <SearchTab />}
+      {tab === "search" && <SearchTab onSelectFc={openFc} />}
 
       {/* ── Onglet Sources & Biais ── */}
       {tab === "sources" && (
@@ -349,7 +567,7 @@ export default function FactchecksDashboard({ onNavigate }) {
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {(data.sources || []).map((s, i) => {
-              const bias = SOURCE_BIAS[s.name] || { lean: "Non classifié", party: "—", color: "#95a5a6", owner: "?" };
+              const bias = SOURCE_BIAS[s.name] || { lean: "Non classifié", color: "#95a5a6", owner: "?" };
               const barW = Math.round(s.count / (data.total || 1) * 100);
               return (
                 <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 200px 120px 90px", alignItems: "center", gap: 14, padding: "10px 14px", borderRadius: 10, border: "1px solid #e8ecf8", background: "#fafbfe" }}>

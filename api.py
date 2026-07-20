@@ -1019,7 +1019,7 @@ def dashboard_factchecks():
     Agrège tous les fact-checks (817) depuis poligraph.fr.
     Cache 30 minutes — calcule classements politiciens, partis, verdicts, sources.
     """
-    cache_key = ("dashboard_fc", "v2")
+    cache_key = ("dashboard_fc", "v3")
     entry = _pg_cache.get(cache_key)
     if entry and time.time() - entry["at"] < 1800:
         return entry["data"]
@@ -1056,12 +1056,17 @@ def dashboard_factchecks():
         m = sum(1 for f in fc_list if f.get("verdictRating") in MID_GROUP)
         fa = sum(1 for f in fc_list if f.get("verdictRating") in FALSE_GROUP)
         u = sum(1 for f in fc_list if f.get("verdictRating") in UNK_GROUP)
+        # Laplace-smoothed net score — prevents small-sample inflation and
+        # guarantees a single ordering so no entity appears in both "reliable" and "unreliable".
+        adj_v = (t  + 1) / (total + 2)
+        adj_f = (fa + 1) / (total + 2)
         return {
             "total":    total,
             "vrai":     t,  "pct_vrai":  round(t  / total * 100),
             "trompeur": m,  "pct_trompeur": round(m / total * 100),
             "faux":     fa, "pct_faux":  round(fa / total * 100),
             "invefi":   u,  "pct_invefi": round(u / total * 100),
+            "net_score": round((adj_v - adj_f) * 100, 1),
         }
 
     # ── Agrégation par politicien ─────────────────────────────────────────
@@ -1107,8 +1112,9 @@ def dashboard_factchecks():
         }
         for s, d in by_pol.items() if len(d["own_fc"]) >= 3
     ]
-    most_reliable  = sorted(pol_honesty, key=lambda x: -x["pct_vrai"])[:10]
-    least_reliable = sorted(pol_honesty, key=lambda x: -x["pct_faux"])[:10]
+    _pol_ordered   = sorted(pol_honesty, key=lambda x: -x["net_score"])
+    most_reliable  = _pol_ordered[:10]
+    least_reliable = list(reversed(_pol_ordered[-10:]))
 
     # Les plus mentionnés dans des fact-checks (toutes déclarations confondues)
     most_mentioned = sorted(
@@ -1155,8 +1161,9 @@ def dashboard_factchecks():
          **score(d["own_fc"])}
         for s, d in by_party.items() if len(d["own_fc"]) >= 3
     ]
-    most_reliable_p  = sorted(party_scores, key=lambda x: -x["pct_vrai"])[:8]
-    least_reliable_p = sorted(party_scores, key=lambda x: -x["pct_faux"])[:8]
+    _party_ordered   = sorted(party_scores, key=lambda x: -x["net_score"])
+    most_reliable_p  = _party_ordered[:8]
+    least_reliable_p = list(reversed(_party_ordered[-8:]))
 
     # ── Verdicts globaux ──────────────────────────────────────────────────
     overall = score(all_fc)
