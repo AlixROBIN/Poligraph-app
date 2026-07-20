@@ -2979,7 +2979,26 @@ def _llm_complete(messages: list, tools: list) -> dict:
     if tools:  # Groq refuse tools=[] avec tool_choice="auto"
         groq_kwargs["tools"]       = tools
         groq_kwargs["tool_choice"] = "auto"
-    response = client.chat.completions.create(**groq_kwargs)
+    try:
+        response = client.chat.completions.create(**groq_kwargs)
+    except Exception as groq_exc:
+        exc_str = str(groq_exc)
+        # Groq génère parfois une syntaxe malformée (ex: <function=name{...} sans ">")
+        # → tool_use_failed 400 : on réessaie sans outils pour obtenir une réponse directe
+        if "tool_use_failed" in exc_str or "Failed to call a function" in exc_str:
+            logger.warning(f"[Groq] tool_use_failed — retry sans outils : {exc_str[:120]}")
+            retry_kwargs = {
+                "model":       _GROQ_MODEL,
+                "messages":    messages,
+                "max_tokens":  1024,
+                "temperature": 0.3,
+            }
+            try:
+                response = client.chat.completions.create(**retry_kwargs)
+            except Exception as retry_exc:
+                raise retry_exc
+        else:
+            raise
     choice = response.choices[0]
     msg    = choice.message
     return {
