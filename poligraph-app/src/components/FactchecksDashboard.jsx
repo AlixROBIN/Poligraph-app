@@ -765,10 +765,10 @@ function SearchTab({ onSelectFc }) {
 }
 
 // ── Composant principal ───────────────────────────────────────────────────────
-export default function FactchecksDashboard({ onNavigate }) {
+export default function FactchecksDashboard({ onNavigate, initialTab }) {
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab,     setTab]     = useState("factchecks");
+  const [tab,     setTab]     = useState(initialTab || "factchecks");
 
   // Modals
   const [selectedFc,  setSelectedFc]  = useState(null);

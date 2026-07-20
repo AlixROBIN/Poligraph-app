@@ -6,6 +6,7 @@ const PAGES = [
   { id: "annuaire",   label: "Annuaire" },
   { id: "exploration",label: "Exploration" },
   { id: "journal",    label: "Journal" },
+  { id: "match",      label: "🗳️ Mon programme" },
 ];
 
 const Navbar = ({ currentPage, onPageChange, canGoBack, onBack }) => (

@@ -40,6 +40,7 @@ function App() {
         {page === "dashboard-scandales" && <ScandalsDashboard onNavigate={navigate} />}
         {page === "dashboard-votes"     && <VotesDashboard onNavigate={navigate} />}
         {page === "dashboard-factchecks"&& <FactchecksDashboard onNavigate={navigate} />}
+        {page === "match"               && <FactchecksDashboard onNavigate={navigate} initialTab="match" />}
         {page === "exploration"         && <ExplorationPage key={JSON.stringify(explorationFilters)} initialFilters={explorationFilters} />}
         {page === "journal"    && <JournalPage />}
         {page === "annuaire"   && <AnnuairePage onNavigate={navigate} />}
