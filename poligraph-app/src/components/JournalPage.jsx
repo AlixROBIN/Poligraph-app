@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { fetchJSON } from "../data/api";
+import { fetchJSON, sendChat } from "../data/api";
 
 // ── Config sources ────────────────────────────────────────────────────────────
 
@@ -179,9 +179,26 @@ function SentimentGauge({ label, score }) {
 
 // ── Modal / drawer article ────────────────────────────────────────────────────
 
-function ArticleDrawer({ article, onClose }) {
+function ArticleDrawer({ article, onClose, kafkaAvailable }) {
   const cfg      = getSourceCfg(article.source);
   const isSocial = false;
+  const [polibotAnalysis, setPolibotAnalysis] = useState(null);
+  const [polibotLoading,  setPolibotLoading]  = useState(false);
+  const [polibotError,    setPolibotError]    = useState(null);
+
+  const analyzeWithPoliBot = async () => {
+    setPolibotLoading(true);
+    setPolibotError(null);
+    try {
+      const question = `Analyse politique de cet article : "${article.title}". ${article.summary || ""}. Quels politiciens ou partis sont impliqués ? Y a-t-il des fact-checks liés dans ta base ?`;
+      const data = await sendChat({ message: question });
+      setPolibotAnalysis(data.response || data.message || "Aucune analyse disponible.");
+    } catch (e) {
+      setPolibotError("Erreur lors de l'analyse PoliBot.");
+    } finally {
+      setPolibotLoading(false);
+    }
+  };
 
   // Fermer avec Échap
   useEffect(() => {
@@ -354,10 +371,51 @@ function ArticleDrawer({ article, onClose }) {
               {article.enriched && (
                 <>
                   <span style={{ margin: "0 8px", color: "#ddd" }}>|</span>
-                  <span>Kafka → Spark → DistilBERT → features</span>
+                  <span>{kafkaAvailable ? "Kafka → " : ""}Spark → DistilBERT → features</span>
                 </>
               )}
             </div>
+          </div>
+
+          {/* PoliBot analyse */}
+          <div style={{ marginBottom: 20 }}>
+            {!polibotAnalysis && !polibotLoading && (
+              <button
+                onClick={analyzeWithPoliBot}
+                style={{
+                  width: "100%", padding: "11px 16px", borderRadius: 10,
+                  border: "1.5px solid #1a3a6e", background: "#f0f4ff",
+                  color: "#1a3a6e", fontWeight: 700, fontSize: 13,
+                  cursor: "pointer", display: "flex", alignItems: "center",
+                  justifyContent: "center", gap: 8,
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = "#dce6ff"}
+                onMouseLeave={e => e.currentTarget.style.background = "#f0f4ff"}
+              >
+                🤖 Analyser avec PoliBot
+              </button>
+            )}
+            {polibotLoading && (
+              <div style={{ textAlign: "center", color: "#888", fontSize: 13, padding: "12px 0" }}>
+                🤖 PoliBot analyse l'article…
+              </div>
+            )}
+            {polibotError && (
+              <p style={{ color: "#e74c3c", fontSize: 12, margin: 0 }}>{polibotError}</p>
+            )}
+            {polibotAnalysis && (
+              <div style={{
+                background: "#f0f4ff", borderRadius: 10, padding: "14px 16px",
+                border: "1.5px solid #c5d3f0",
+              }}>
+                <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: "#7a8aaa", textTransform: "uppercase", letterSpacing: "0.6px" }}>
+                  🤖 Analyse PoliBot
+                </p>
+                <p style={{ margin: 0, fontSize: 13, color: "#333", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+                  {polibotAnalysis}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* URL — bouton principal */}
@@ -709,6 +767,7 @@ const JournalPage = () => {
         <ArticleDrawer
           article={selectedArticle}
           onClose={() => setSelectedArticle(null)}
+          kafkaAvailable={kafkaAvailable}
         />
       )}
 
