@@ -2393,7 +2393,7 @@ Quand `analyze_political_figure` retourne des données de presse :
 - Indique clairement si une donnée est absente
 - Sois précis et concis — pas de rembourrage"""
 
-_GROQ_MODEL   = os.getenv("GROQ_MODEL",   "llama-3.3-70b-versatile")
+_GROQ_MODEL   = os.getenv("GROQ_MODEL",   "llama3-groq-70b-8192-tool-use-preview")
 _OLLAMA_URL   = os.getenv("OLLAMA_URL",   "http://localhost:11434")
 _OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 _CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-4-8")
