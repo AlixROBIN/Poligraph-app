@@ -278,40 +278,58 @@ function PoliticianFcPanel({ politician, onClose, onSelectFc }) {
         {!loading && (!fcs || fcs.length === 0) && (
           <p style={{ color: "#aaa", textAlign: "center", padding: "2rem 0" }}>Aucun fact-check trouvé.</p>
         )}
-        {!loading && fcs && fcs.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {fcs.map((fc, i) => {
-              const cfg  = verdictCfg(fc.verdictRating);
-              const date = fc.publishedAt ? new Date(fc.publishedAt).toLocaleDateString("fr-FR") : "";
-              return (
-                <div
-                  key={i}
-                  onClick={() => onSelectFc(fc)}
-                  style={{
-                    padding: "12px 14px", borderRadius: 10, border: "1px solid #e8ecf8",
-                    background: "#fafbfe", cursor: "pointer", transition: "box-shadow 0.15s",
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,0,0,0.10)"}
-                  onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}
-                >
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
-                    <span style={{
-                      background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}55`,
-                      borderRadius: 12, padding: "2px 10px", fontSize: 11, fontWeight: 700,
-                    }}>
-                      {cfg.label}
-                    </span>
-                    <span style={{ fontSize: 11, color: "#888" }}>{fc.source}</span>
-                    <span style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}>{date}</span>
-                  </div>
-                  <div style={{ fontSize: 13, color: "#1a2e5a", lineHeight: 1.5 }}>
-                    « {(fc.claimText || "").slice(0, 180)}{(fc.claimText || "").length > 180 ? "…" : ""} »
-                  </div>
+        {!loading && fcs && fcs.length > 0 && (() => {
+          const norm = s => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+          const polN = norm(politician.name);
+          const isOwn = fc => { const c = norm(fc.claimant || ""); return c && (c.includes(polN) || polN.includes(c)); };
+          const ownFcs   = fcs.filter(isOwn);
+          const aboutFcs = fcs.filter(fc => !isOwn(fc));
+
+          const FcCard = ({ fc }) => {
+            const cfg  = verdictCfg(fc.verdictRating);
+            const date = fc.publishedAt ? new Date(fc.publishedAt).toLocaleDateString("fr-FR") : "";
+            return (
+              <div
+                onClick={() => onSelectFc(fc)}
+                style={{ padding: "12px 14px", borderRadius: 10, border: "1px solid #e8ecf8", background: "#fafbfe", cursor: "pointer", transition: "box-shadow 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,0,0,0.10)"}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}
+              >
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
+                  <span style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}55`, borderRadius: 12, padding: "2px 10px", fontSize: 11, fontWeight: 700 }}>{cfg.label}</span>
+                  <span style={{ fontSize: 11, color: "#888" }}>{fc.source}</span>
+                  {fc.claimant && norm(fc.claimant) !== polN && (
+                    <span style={{ fontSize: 11, color: "#8e44ad" }}>par {fc.claimant}</span>
+                  )}
+                  <span style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}>{date}</span>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                <div style={{ fontSize: 13, color: "#1a2e5a", lineHeight: 1.5 }}>
+                  « {(fc.claimText || "").slice(0, 180)}{(fc.claimText || "").length > 180 ? "…" : ""} »
+                </div>
+              </div>
+            );
+          };
+
+          const Section = ({ title, color, bg, items }) => items.length === 0 ? null : (
+            <div style={{ marginBottom: "1.2rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <div style={{ width: 4, height: 18, borderRadius: 2, background: color }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color }}>{title}</span>
+                <span style={{ fontSize: 11, color: "#aaa", background: bg, borderRadius: 10, padding: "1px 8px" }}>{items.length}</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {items.map((fc, i) => <FcCard key={i} fc={fc} />)}
+              </div>
+            </div>
+          );
+
+          return (
+            <>
+              <Section title="Déclarations faites par lui" color="#1a3a6e" bg="#eaf0ff" items={ownFcs} />
+              <Section title="Fact-checks où il est mentionné" color="#8e44ad" bg="#f5f0ff" items={aboutFcs} />
+            </>
+          );
+        })()}
       </div>
     </div>
   );
