@@ -3224,23 +3224,58 @@ def factcheck_summarize(req: FactCheckSummaryRequest):
     et ce que la réalité montre à la place.
     """
     verdict_fr = _VERDICT_FR.get(req.verdictRating, req.verdictRating or "Non classifié")
-    pols_str   = ", ".join(str(p) for p in req.politicians) if req.politicians else req.claimant or "inconnu"
     date_str   = (req.publishedAt or "")[:10] or "date inconnue"
+    claimant   = req.claimant or ""
+    pols       = [str(p) for p in req.politicians] if req.politicians else []
+
+    # Détecter si le claimant est un politicien nommé ou une source virale / anonyme
+    _RUMEUR_TOKENS = {"réseau", "social", "publication", "sources", "multiple", "viral",
+                      "web", "internet", "tweet", "facebook", "tiktok", "whatsapp",
+                      "circule", "claim", "post", "anonyme", "inconnu", "divers"}
+    claimant_lower = claimant.lower()
+    is_rumeur = (
+        not claimant
+        or any(tok in claimant_lower for tok in _RUMEUR_TOKENS)
+        or claimant.lower().startswith("des ")
+        or claimant.lower().startswith("plusieurs ")
+        or claimant.lower().startswith("multiple")
+    )
+
+    pols_str = ", ".join(pols) if pols else (claimant if not is_rumeur else "")
+
+    if is_rumeur:
+        # Claim = rumeur / publication virale / tiers anonyme
+        sujet_str = pols_str or "des personnalités politiques"
+        contexte_instruction = (
+            f"1. **Contexte** : Cette affirmation circule sur les réseaux sociaux ou dans des médias non identifiés. "
+            f"Explique brièvement quel type de rumeur ou de narrative c'est (désinformation, manipulation d'image, "
+            f"mauvaise interprétation d'archive…), et qui est visé ({sujet_str})."
+        )
+    else:
+        # Claim = déclaration directe d'un politicien
+        contexte_instruction = (
+            f"1. **Contexte** : Quand et dans quelle situation {claimant} a probablement fait cette déclaration "
+            f"(ex: débat télévisé, meeting, interview, discours parlementaire…)."
+        )
+
+    claimant_label = f"Rumeur / publication anonyme (sujet : {pols_str or 'non précisé'})" if is_rumeur else claimant
 
     prompt = (
         f"Tu es un analyste politique français expert en fact-checking. "
-        f"Analyse cette déclaration vérifiée et rédige un résumé structuré en 4-6 phrases.\n\n"
-        f"DÉCLARATION : « {req.claimText[:500]} »\n"
+        f"Analyse ce fact-check et rédige un résumé structuré.\n\n"
+        f"AFFIRMATION VÉRIFIÉE : « {req.claimText[:500]} »\n"
         f"VERDICT : {verdict_fr}\n"
-        f"DÉCLARANT : {pols_str}\n"
-        f"SOURCE : {req.source or 'inconnue'} ({date_str})\n\n"
+        f"ORIGINE : {claimant_label}\n"
+        f"SOURCE DU FACT-CHECK : {req.source or 'inconnue'} ({date_str})\n\n"
         f"Réponds avec ces 4 points, chacun en 1-2 phrases :\n"
-        f"1. **Contexte** : Quand et dans quelle situation cette déclaration a probablement été faite "
-        f"(ex: débat télévisé, meeting, interview, tweet…)\n"
-        f"2. **Pourquoi le verdict est « {verdict_fr} »** : Quelle est l'erreur factuelle ou le manque de contexte\n"
-        f"3. **Ce que les données montrent** : Les chiffres ou faits réels qui contredisent (ou confirment) la déclaration\n"
-        f"4. **Nuance** : S'il y a une part de vérité ou un contexte qui explique la déclaration\n\n"
-        f"Sois factuel, précis, sans jugement politique. Réponds uniquement en français."
+        f"{contexte_instruction}\n"
+        f"2. **Pourquoi le verdict est « {verdict_fr} »** : Quelle est l'erreur factuelle, "
+        f"l'exagération ou l'absence de preuves qui justifie ce verdict\n"
+        f"3. **Ce que les données montrent** : Les faits réels, chiffres ou éléments concrets "
+        f"qui contredisent (ou nuancent) l'affirmation\n"
+        f"4. **Nuance** : S'il y a une part de vérité, un contexte particulier ou une subtilité "
+        f"que le verdict ne capture pas entièrement\n\n"
+        f"Sois factuel et précis. Ne fais pas de procès d'intention. Réponds uniquement en français."
     )
 
     try:

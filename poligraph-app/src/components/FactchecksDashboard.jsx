@@ -2,6 +2,17 @@ import { useState, useEffect, useCallback } from "react";
 
 const BASE = (process.env.REACT_APP_API_URL || "http://localhost:8000") + "/api";
 
+// Détecte si le claimant est une source virale/anonyme (pas un politicien nommé)
+function isRumeurClaimant(claimant) {
+  if (!claimant) return true;
+  const l = claimant.toLowerCase();
+  const tokens = ["réseau", "social", "publication", "sources", "multiple", "viral",
+                  "web", "internet", "tweet", "facebook", "tiktok", "whatsapp",
+                  "circule", "post", "anonyme", "inconnu", "divers", "médias",
+                  "internaute", "utilisateur"];
+  return tokens.some(t => l.includes(t)) || l.startsWith("des ") || l.startsWith("plusieurs ") || l === "multiple sources";
+}
+
 const SOURCE_BIAS = {
   "TF1 Info":           { lean: "Centre-droite", color: "#e67e22", owner: "Bouygues" },
   "AFP Factuel":        { lean: "Neutre",         color: "#27ae60", owner: "Agence publique" },
@@ -38,11 +49,24 @@ function verdictCfg(rating) {
 function FactCheckModal({ fc, onClose }) {
   const [summary,        setSummary]        = useState(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [relatedFcs,     setRelatedFcs]     = useState(null);
 
   if (!fc) return null;
   const cfg  = verdictCfg(fc.verdictRating);
   const pols = (fc.politicians || []).map(p => p?.fullName).filter(Boolean);
   const date = fc.publishedAt ? new Date(fc.publishedAt).toLocaleDateString("fr-FR") : "";
+  const rumeur = isRumeurClaimant(fc.claimant);
+
+  // Pour les rumeurs : cherche d'autres FC sur le même sujet (mots-clés du titre)
+  const loadRelated = () => {
+    if (relatedFcs !== null) return;
+    const words = (fc.claimText || "").split(/\s+/).filter(w => w.length > 4).slice(0, 4).join(" ");
+    if (!words) { setRelatedFcs([]); return; }
+    fetch(`${BASE}/search/factchecks?q=${encodeURIComponent(words)}&limit=6`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setRelatedFcs((d?.data || []).filter(r => r.claimText !== fc.claimText)))
+      .catch(() => setRelatedFcs([]));
+  };
 
   const analyze = () => {
     setLoadingSummary(true);
@@ -104,42 +128,59 @@ function FactCheckModal({ fc, onClose }) {
         >✕</button>
 
         {/* Verdict + source */}
-        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: "1.2rem", flexWrap: "wrap" }}>
-          <span style={{
-            background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}55`,
-            borderRadius: 12, padding: "4px 14px", fontSize: 14, fontWeight: 800,
-          }}>
-            {cfg.label}
-          </span>
-          <span style={{ fontSize: 12, color: "#888" }}>{fc.source}</span>
-          <span style={{ fontSize: 12, color: "#aaa", marginLeft: "auto" }}>{date}</span>
-        </div>
+        {(() => {
+          const rumeur = isRumeurClaimant(fc.claimant);
+          return (
+            <>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: "1.2rem", flexWrap: "wrap" }}>
+                <span style={{
+                  background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}55`,
+                  borderRadius: 12, padding: "4px 14px", fontSize: 14, fontWeight: 800,
+                }}>
+                  {cfg.label}
+                </span>
+                {rumeur && (
+                  <span title="Cette affirmation provient de sources virales ou anonymes, non d'un politicien nommé"
+                    style={{ fontSize: 11, background: "#fff3cd", color: "#856404", border: "1px solid #ffc10766", borderRadius: 10, padding: "2px 9px" }}>
+                    Rumeur virale
+                  </span>
+                )}
+                <span style={{ fontSize: 12, color: "#888" }}>Vérifié par {fc.source}</span>
+                <span style={{ fontSize: 12, color: "#aaa", marginLeft: "auto" }}>{date}</span>
+              </div>
 
-        {/* Déclaration — mise en valeur */}
-        <blockquote style={{
-          fontSize: 16, fontWeight: 700, color: "#1a2e5a", lineHeight: 1.65,
-          margin: "0 0 1.2rem", borderLeft: `5px solid ${cfg.color}`,
-          paddingLeft: 16, background: cfg.bg + "55", borderRadius: "0 10px 10px 0",
-          padding: "12px 12px 12px 16px",
-        }}>
-          « {fc.claimText || "Déclaration non renseignée"} »
-        </blockquote>
+              {/* Déclaration — mise en valeur */}
+              <blockquote style={{
+                fontSize: 16, fontWeight: 700, color: "#1a2e5a", lineHeight: 1.65,
+                margin: "0 0 1.2rem", borderLeft: `5px solid ${cfg.color}`,
+                paddingLeft: 16, background: cfg.bg + "55", borderRadius: "0 10px 10px 0",
+                padding: "12px 12px 12px 16px",
+              }}>
+                « {fc.claimText || "Déclaration non renseignée"} »
+              </blockquote>
 
-        {/* Qui a dit quoi */}
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: "1rem", fontSize: 13 }}>
-          {fc.claimant && (
-            <div style={{ background: "#f0f4ff", borderRadius: 8, padding: "8px 12px", flex: 1 }}>
-              <div style={{ fontSize: 11, color: "#aaa", marginBottom: 2 }}>Déclaré par</div>
-              <div style={{ fontWeight: 700, color: "#1a2e5a" }}>{fc.claimant}</div>
-            </div>
-          )}
-          {pols.length > 0 && pols.join(", ") !== fc.claimant && (
-            <div style={{ background: "#f8f0ff", borderRadius: 8, padding: "8px 12px", flex: 1 }}>
-              <div style={{ fontSize: 11, color: "#aaa", marginBottom: 2 }}>Politicien(s) impliqué(s)</div>
-              <div style={{ fontWeight: 600, color: "#8e44ad" }}>{pols.join(", ")}</div>
-            </div>
-          )}
-        </div>
+              {/* Qui a dit quoi */}
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: "1rem", fontSize: 13 }}>
+                {fc.claimant && (
+                  <div style={{ background: rumeur ? "#fffbea" : "#f0f4ff", borderRadius: 8, padding: "8px 12px", flex: 1 }}>
+                    <div style={{ fontSize: 11, color: "#aaa", marginBottom: 2 }}>
+                      {rumeur ? "Origine de l'affirmation" : "Déclaré par"}
+                    </div>
+                    <div style={{ fontWeight: 700, color: rumeur ? "#856404" : "#1a2e5a" }}>
+                      {rumeur ? (fc.claimant || "Sources virales / anonymes") : fc.claimant}
+                    </div>
+                  </div>
+                )}
+                {pols.length > 0 && pols.join(", ") !== fc.claimant && (
+                  <div style={{ background: "#f8f0ff", borderRadius: 8, padding: "8px 12px", flex: 1 }}>
+                    <div style={{ fontSize: 11, color: "#aaa", marginBottom: 2 }}>Politicien(s) impliqué(s)</div>
+                    <div style={{ fontWeight: 600, color: "#8e44ad" }}>{pols.join(", ")}</div>
+                  </div>
+                )}
+              </div>
+            </>
+          );
+        })()}
 
         {/* Titre de l'article si disponible */}
         {fc.articleTitle && (
@@ -196,21 +237,64 @@ function FactCheckModal({ fc, onClose }) {
           </div>
         )}
 
-        {/* Lien externe */}
-        {fc.sourceUrl && (
-          <a
-            href={fc.sourceUrl}
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              display: "inline-block",
-              padding: "9px 22px", borderRadius: 8,
-              background: "#1a3a6e", color: "#fff",
-              textDecoration: "none", fontWeight: 700, fontSize: 13,
-            }}
-          >
-            Lire l'article complet → {fc.source}
-          </a>
+        {/* Lien externe + sources liées pour les rumeurs */}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          {fc.sourceUrl && (
+            <a
+              href={fc.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: "inline-block",
+                padding: "9px 22px", borderRadius: 8,
+                background: "#1a3a6e", color: "#fff",
+                textDecoration: "none", fontWeight: 700, fontSize: 13,
+              }}
+            >
+              {rumeur ? `Voir la vérification → ${fc.source}` : `Lire l'article complet → ${fc.source}`}
+            </a>
+          )}
+          {rumeur && (
+            <button
+              onClick={loadRelated}
+              style={{
+                padding: "9px 16px", borderRadius: 8, border: "1px solid #d0d8f0",
+                background: "#f8f9fc", color: "#555", cursor: "pointer", fontSize: 12, fontWeight: 600,
+              }}
+            >
+              Voir d'autres fact-checks sur ce sujet
+            </button>
+          )}
+        </div>
+
+        {/* Fact-checks liés (pour rumeurs virales) */}
+        {relatedFcs && relatedFcs.length > 0 && (
+          <div style={{ marginTop: "1rem", borderTop: "1px solid #e8ecf8", paddingTop: "1rem" }}>
+            <p style={{ fontSize: 12, color: "#888", margin: "0 0 8px" }}>
+              Autres fact-checks sur ce sujet ({relatedFcs.length}) :
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {relatedFcs.map((r, i) => {
+                const rcfg = verdictCfg(r.verdictRating);
+                const rdate = r.publishedAt ? new Date(r.publishedAt).toLocaleDateString("fr-FR") : "";
+                return (
+                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12, padding: "6px 10px", background: "#fafbfe", borderRadius: 8, border: "1px solid #e8ecf8" }}>
+                    <span style={{ background: rcfg.bg, color: rcfg.color, border: `1px solid ${rcfg.color}55`, borderRadius: 10, padding: "1px 8px", fontWeight: 700, whiteSpace: "nowrap" }}>{rcfg.label}</span>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ color: "#1a2e5a" }}>{(r.claimText || "").slice(0, 120)}{r.claimText?.length > 120 ? "…" : ""}</span>
+                      <span style={{ color: "#aaa", marginLeft: 6 }}>— {r.source} · {rdate}</span>
+                    </div>
+                    {r.sourceUrl && (
+                      <a href={r.sourceUrl} target="_blank" rel="noreferrer" style={{ color: "#1a3a6e", fontWeight: 700, whiteSpace: "nowrap" }}>↗</a>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {relatedFcs && relatedFcs.length === 0 && (
+          <p style={{ fontSize: 12, color: "#bbb", marginTop: 8 }}>Aucun fact-check similaire trouvé dans la base.</p>
         )}
       </div>
     </div>
@@ -249,8 +333,10 @@ function PoliticianFcPanel({ politician, onClose, onSelectFc }) {
   const norm = s => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 
   const FcCard = ({ fc }) => {
-    const cfg  = verdictCfg(fc.verdictRating);
-    const date = fc.publishedAt ? new Date(fc.publishedAt).toLocaleDateString("fr-FR") : "";
+    const cfg     = verdictCfg(fc.verdictRating);
+    const date    = fc.publishedAt ? new Date(fc.publishedAt).toLocaleDateString("fr-FR") : "";
+    const rumeur  = isRumeurClaimant(fc.claimant);
+    const showBy  = !rumeur && fc.claimant && norm(fc.claimant) !== norm(politician.name);
     return (
       <div
         onClick={() => onSelectFc(fc)}
@@ -260,10 +346,11 @@ function PoliticianFcPanel({ politician, onClose, onSelectFc }) {
       >
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
           <span style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}55`, borderRadius: 12, padding: "2px 10px", fontSize: 11, fontWeight: 700 }}>{cfg.label}</span>
-          <span style={{ fontSize: 11, color: "#888" }}>{fc.source}</span>
-          {fc.claimant && norm(fc.claimant) !== norm(politician.name) && (
-            <span style={{ fontSize: 11, color: "#8e44ad" }}>par {fc.claimant}</span>
+          {rumeur && (
+            <span title="Affirmation virale / sources anonymes" style={{ fontSize: 10, background: "#fff3cd", color: "#856404", border: "1px solid #ffc10766", borderRadius: 10, padding: "1px 7px" }}>Rumeur virale</span>
           )}
+          <span style={{ fontSize: 11, color: "#888" }}>Vérifié par {fc.source}</span>
+          {showBy && <span style={{ fontSize: 11, color: "#8e44ad" }}>· déclaré par {fc.claimant}</span>}
           <span style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}>{date}</span>
         </div>
         <div style={{ fontSize: 13, color: "#1a2e5a", lineHeight: 1.5 }}>
