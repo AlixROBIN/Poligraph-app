@@ -1032,11 +1032,11 @@ def _all_factchecks_cached() -> list:
 
 
 @app.get("/api/search/factchecks")
-def search_factchecks_local(q: str = "", verdictRating: str = "", source: str = "", limit: int = 50):
+def search_factchecks_local(q: str = "", verdictRating: str = "", source: str = "", limit: int = 50, claimant: str = ""):
     """
     Recherche locale multi-champs sur tous les fact-checks cachés.
-    Tokenise la requête et cherche dans : claimText, claimant, noms des politiciens.
-    Normalise les accents → "rima hassan apologie terrorisme" trouve des résultats.
+    - claimant=<nom> : filtre strict sur le champ claimant (pour les déclarations d'un politicien)
+    - q=<texte>      : recherche tokenisée dans claimText, claimant, politiciens, titre
     """
     import unicodedata, re as _re
 
@@ -1050,6 +1050,16 @@ def search_factchecks_local(q: str = "", verdictRating: str = "", source: str = 
         results = [fc for fc in results if fc.get("verdictRating") == verdictRating]
     if source:
         results = [fc for fc in results if fc.get("source", "") == source]
+
+    # Filtre strict sur le claimant (déclarations faites PAR ce politicien)
+    if claimant:
+        cn = _norm(claimant)
+        def _claimant_match(fc):
+            c = _norm(fc.get("claimant") or "")
+            return bool(c) and (cn in c or c in cn)
+        results = [fc for fc in results if _claimant_match(fc)]
+        results = sorted(results, key=lambda fc: fc.get("publishedAt") or "", reverse=True)[:limit]
+        return {"data": results, "total": len(results), "searched_corpus": len(_all_factchecks_cached())}
 
     if q:
         tokens = [t for t in _re.split(r'\s+', _norm(q).strip()) if len(t) > 1]
@@ -2032,9 +2042,9 @@ AGENT_TOOLS = [
                                  "RENVOI_TRIBUNAL", "NON_LIEU", "MISE_EN_EXAMEN", "PROCES_EN_COURS"],
                         "description": "Statut judiciaire exact",
                     },
-                    "annee_min": {"type": "integer", "description": "Année minimale des faits"},
-                    "annee_max": {"type": "integer", "description": "Année maximale des faits"},
-                    "limit":     {"type": "integer", "description": "Nombre de résultats (défaut 10, max 30)"},
+                    "annee_min": {"type": "string", "description": "Année minimale des faits (ex: '2015')"},
+                    "annee_max": {"type": "string", "description": "Année maximale des faits (ex: '2024')"},
+                    "limit":     {"type": "string", "description": "Nombre de résultats (défaut 10, max 30)"},
                 },
                 "required": [],
             },
@@ -2050,8 +2060,8 @@ AGENT_TOOLS = [
                 "properties": {
                     "q":      {"type": "string",  "description": "Mots-clés dans le titre du vote/loi"},
                     "result": {"type": "string",  "enum": ["ADOPTED", "REJECTED"], "description": "Résultat du vote"},
-                    "annee":  {"type": "integer", "description": "Année du vote (2017-2026)"},
-                    "limit":  {"type": "integer", "description": "Nombre de résultats (défaut 10, max 30)"},
+                    "annee":  {"type": "string", "description": "Année du vote (ex: '2022')"},
+                    "limit":  {"type": "string", "description": "Nombre de résultats (défaut 10, max 30)"},
                 },
                 "required": [],
             },
@@ -2091,7 +2101,7 @@ AGENT_TOOLS = [
                 "type": "object",
                 "properties": {
                     "q":     {"type": "string",  "description": "Mots-clés dans le titre ou résumé"},
-                    "limit": {"type": "integer", "description": "Nombre d'articles (défaut 8, max 20)"},
+                    "limit": {"type": "string", "description": "Nombre d'articles (défaut 8, max 20)"},
                 },
                 "required": [],
             },
@@ -2147,7 +2157,7 @@ AGENT_TOOLS = [
                 "properties": {
                     "query":  {"type": "string", "description": "Description en langage naturel de ce que vous cherchez"},
                     "source": {"type": "string", "enum": ["all", "scandale", "factcheck"], "description": "Type de document (défaut: all)"},
-                    "limit":  {"type": "integer", "description": "Nombre de résultats (défaut 8, max 15)"},
+                    "limit":  {"type": "string", "description": "Nombre de résultats (défaut 8, max 15)"},
                 },
                 "required": ["query"],
             },
@@ -2173,7 +2183,7 @@ AGENT_TOOLS = [
                         "description": "Filtrer par verdict exact",
                     },
                     "source":  {"type": "string", "description": "Source du fact-check (ex: 'AFP Factuel', 'Le Monde')"},
-                    "limit":   {"type": "integer", "description": "Nombre de résultats (défaut 10, max 30)"},
+                    "limit":   {"type": "string", "description": "Nombre de résultats (défaut 10, max 30)"},
                 },
                 "required": [],
             },
@@ -2194,7 +2204,7 @@ AGENT_TOOLS = [
                 "properties": {
                     "question":   {"type": "string",  "description": "La question précise (ex: 'Pourquoi cette déclaration est-elle fausse ?', 'Quelle preuve montre que X a menti sur Y ?')"},
                     "politician": {"type": "string",  "description": "Nom du politicien pour filtrer (optionnel, ex: 'Bardella', 'Le Pen')"},
-                    "limit":      {"type": "integer", "description": "Nombre de fact-checks à analyser (défaut 5, max 10)"},
+                    "limit":      {"type": "string", "description": "Nombre de fact-checks à analyser (défaut 5, max 10)"},
                 },
                 "required": ["question"],
             },
@@ -2206,6 +2216,9 @@ AGENT_TOOLS = [
 def _tool_search_scandales(q="", category="", parti="", statut="",
                             annee_min=0, annee_max=9999, limit=10):
     try:
+        annee_min = int(annee_min) if annee_min else 0
+        annee_max = int(annee_max) if annee_max else 9999
+        limit = min(int(limit) if limit else 10, 30)
         sc = _df_scandales if _df_scandales is not None else pd.read_csv(ANALYTICS_DIR / "scandales_features.csv", low_memory=False)
         sc = sc.copy()
         if q:
@@ -2228,7 +2241,6 @@ def _tool_search_scandales(q="", category="", parti="", statut="",
         cols = ["title", "category", "status", "politician_name", "party_short",
                 "annee_faits", "institution", "sentence", "description"]
         cols = [c for c in cols if c in sc.columns]
-        limit = min(int(limit), 30)
         results = sc[cols].head(limit).fillna("").to_dict(orient="records")
         return {"total_trouvé": len(sc), "résultats": results}
     except Exception as e:
@@ -2237,6 +2249,8 @@ def _tool_search_scandales(q="", category="", parti="", statut="",
 
 def _tool_search_votes(q="", result="", annee=0, limit=10):
     try:
+        annee = int(annee) if annee else 0
+        limit = min(int(limit) if limit else 10, 30)
         vt = _df_votes if _df_votes is not None else pd.read_csv(ANALYTICS_DIR / "votes_features.csv", low_memory=False)
         vt = vt.copy()
         if q:
@@ -2248,7 +2262,7 @@ def _tool_search_votes(q="", result="", annee=0, limit=10):
         cols = ["title", "result", "annee_vote", "legislature",
                 "votesFor", "votesAgainst", "votesAbstain", "totalVotes"]
         cols = [c for c in cols if c in vt.columns]
-        results = vt[cols].head(int(limit)).fillna("").to_dict(orient="records")
+        results = vt[cols].head(limit).fillna("").to_dict(orient="records")
         return {"total_trouvé": len(vt), "résultats": results}
     except Exception as e:
         return {"erreur": str(e), "résultats": []}

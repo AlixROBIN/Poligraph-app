@@ -219,20 +219,76 @@ function FactCheckModal({ fc, onClose }) {
 
 // ── Panel fact-checks d'un politicien ────────────────────────────────────────
 function PoliticianFcPanel({ politician, onClose, onSelectFc }) {
-  const [fcs,     setFcs]     = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [ownFcs,   setOwnFcs]   = useState(null);   // déclarations faites PAR lui
+  const [aboutFcs, setAboutFcs] = useState(null);   // mentions par d'autres
+  const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
     if (!politician?.name) return;
     setLoading(true);
-    fetch(`${BASE}/search/factchecks?q=${encodeURIComponent(politician.name)}&limit=50`)
-      .then(r => r.ok ? r.json() : null)
-      .then(d => setFcs(d?.data || []))
-      .catch(() => setFcs([]))
+    setOwnFcs(null);
+    setAboutFcs(null);
+    const name = encodeURIComponent(politician.name);
+    // Deux requêtes parallèles : claimant strict + mentions générales
+    Promise.all([
+      fetch(`${BASE}/search/factchecks?claimant=${name}&limit=100`).then(r => r.ok ? r.json() : null),
+      fetch(`${BASE}/search/factchecks?q=${name}&limit=150`).then(r => r.ok ? r.json() : null),
+    ]).then(([ownData, allData]) => {
+      const own = ownData?.data || [];
+      const ownIds = new Set(own.map(fc => fc.id || fc.claimText));
+      // Exclure du flux "mentions" ceux déjà dans "own"
+      const about = (allData?.data || []).filter(fc => !ownIds.has(fc.id || fc.claimText));
+      setOwnFcs(own);
+      setAboutFcs(about);
+    }).catch(() => { setOwnFcs([]); setAboutFcs([]); })
       .finally(() => setLoading(false));
   }, [politician?.name]);
 
   if (!politician) return null;
+
+  const norm = s => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+
+  const FcCard = ({ fc }) => {
+    const cfg  = verdictCfg(fc.verdictRating);
+    const date = fc.publishedAt ? new Date(fc.publishedAt).toLocaleDateString("fr-FR") : "";
+    return (
+      <div
+        onClick={() => onSelectFc(fc)}
+        style={{ padding: "12px 14px", borderRadius: 10, border: "1px solid #e8ecf8", background: "#fafbfe", cursor: "pointer", transition: "box-shadow 0.15s" }}
+        onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,0,0,0.10)"}
+        onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}
+      >
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
+          <span style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}55`, borderRadius: 12, padding: "2px 10px", fontSize: 11, fontWeight: 700 }}>{cfg.label}</span>
+          <span style={{ fontSize: 11, color: "#888" }}>{fc.source}</span>
+          {fc.claimant && norm(fc.claimant) !== norm(politician.name) && (
+            <span style={{ fontSize: 11, color: "#8e44ad" }}>par {fc.claimant}</span>
+          )}
+          <span style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}>{date}</span>
+        </div>
+        <div style={{ fontSize: 13, color: "#1a2e5a", lineHeight: 1.5 }}>
+          « {(fc.claimText || "").slice(0, 180)}{(fc.claimText || "").length > 180 ? "…" : ""} »
+        </div>
+      </div>
+    );
+  };
+
+  const Section = ({ title, color, bg, items, note }) => !items || items.length === 0 ? null : (
+    <div style={{ marginBottom: "1.2rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+        <div style={{ width: 4, height: 18, borderRadius: 2, background: color }} />
+        <span style={{ fontSize: 13, fontWeight: 700, color }}>{title}</span>
+        <span style={{ fontSize: 11, color: "#aaa", background: bg, borderRadius: 10, padding: "1px 8px" }}>{items.length}</span>
+        {note && <span style={{ fontSize: 10, color: "#bbb", fontStyle: "italic" }}>{note}</span>}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {items.map((fc, i) => <FcCard key={i} fc={fc} />)}
+      </div>
+    </div>
+  );
+
+  const totalOwn   = politician.nb_déclarations ?? (ownFcs?.length ?? 0);
+  const totalAbout = politician.nb_mentions      ?? (aboutFcs?.length ?? 0);
 
   return (
     <div
@@ -261,75 +317,34 @@ function PoliticianFcPanel({ politician, onClose, onSelectFc }) {
         </h3>
         <div style={{ margin: "0 0 1.2rem", display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontSize: 12, color: "#888" }}>{politician.party}</span>
-          {politician.nb_déclarations != null && (
-            <span style={{ fontSize: 11, background: "#eaf0ff", color: "#1a3a6e", borderRadius: 8, padding: "2px 8px" }}>
-              {politician.nb_déclarations} déclaration{politician.nb_déclarations > 1 ? "s" : ""} faite{politician.nb_déclarations > 1 ? "s" : ""} par lui
-            </span>
-          )}
-          {politician.nb_mentions != null && politician.nb_mentions > 0 && (
+          <span style={{ fontSize: 11, background: "#eaf0ff", color: "#1a3a6e", borderRadius: 8, padding: "2px 8px" }}>
+            {totalOwn} déclaration{totalOwn !== 1 ? "s" : ""} faite{totalOwn !== 1 ? "s" : ""} par lui
+          </span>
+          {totalAbout > 0 && (
             <span style={{ fontSize: 11, background: "#f5f0ff", color: "#8e44ad", borderRadius: 8, padding: "2px 8px" }}>
-              {politician.nb_mentions} mention{politician.nb_mentions > 1 ? "s" : ""} par d'autres
+              {totalAbout} mention{totalAbout !== 1 ? "s" : ""} par d'autres
             </span>
           )}
-          <span style={{ fontSize: 11, color: "#aaa" }}>— liste ci-dessous : toutes apparitions</span>
         </div>
 
         {loading && <p style={{ color: "#aaa", textAlign: "center", padding: "2rem 0" }}>Chargement…</p>}
-        {!loading && (!fcs || fcs.length === 0) && (
+        {!loading && (!ownFcs?.length && !aboutFcs?.length) && (
           <p style={{ color: "#aaa", textAlign: "center", padding: "2rem 0" }}>Aucun fact-check trouvé.</p>
         )}
-        {!loading && fcs && fcs.length > 0 && (() => {
-          const norm = s => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
-          const polN = norm(politician.name);
-          const isOwn = fc => { const c = norm(fc.claimant || ""); return c && (c.includes(polN) || polN.includes(c)); };
-          const ownFcs   = fcs.filter(isOwn);
-          const aboutFcs = fcs.filter(fc => !isOwn(fc));
-
-          const FcCard = ({ fc }) => {
-            const cfg  = verdictCfg(fc.verdictRating);
-            const date = fc.publishedAt ? new Date(fc.publishedAt).toLocaleDateString("fr-FR") : "";
-            return (
-              <div
-                onClick={() => onSelectFc(fc)}
-                style={{ padding: "12px 14px", borderRadius: 10, border: "1px solid #e8ecf8", background: "#fafbfe", cursor: "pointer", transition: "box-shadow 0.15s" }}
-                onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,0,0,0.10)"}
-                onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}
-              >
-                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
-                  <span style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}55`, borderRadius: 12, padding: "2px 10px", fontSize: 11, fontWeight: 700 }}>{cfg.label}</span>
-                  <span style={{ fontSize: 11, color: "#888" }}>{fc.source}</span>
-                  {fc.claimant && norm(fc.claimant) !== polN && (
-                    <span style={{ fontSize: 11, color: "#8e44ad" }}>par {fc.claimant}</span>
-                  )}
-                  <span style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}>{date}</span>
-                </div>
-                <div style={{ fontSize: 13, color: "#1a2e5a", lineHeight: 1.5 }}>
-                  « {(fc.claimText || "").slice(0, 180)}{(fc.claimText || "").length > 180 ? "…" : ""} »
-                </div>
-              </div>
-            );
-          };
-
-          const Section = ({ title, color, bg, items }) => items.length === 0 ? null : (
-            <div style={{ marginBottom: "1.2rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <div style={{ width: 4, height: 18, borderRadius: 2, background: color }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color }}>{title}</span>
-                <span style={{ fontSize: 11, color: "#aaa", background: bg, borderRadius: 10, padding: "1px 8px" }}>{items.length}</span>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {items.map((fc, i) => <FcCard key={i} fc={fc} />)}
-              </div>
-            </div>
-          );
-
-          return (
-            <>
-              <Section title="Déclarations faites par lui" color="#1a3a6e" bg="#eaf0ff" items={ownFcs} />
-              <Section title="Fact-checks où il est mentionné" color="#8e44ad" bg="#f5f0ff" items={aboutFcs} />
-            </>
-          );
-        })()}
+        {!loading && (
+          <>
+            <Section
+              title="Déclarations faites par lui" color="#1a3a6e" bg="#eaf0ff"
+              items={ownFcs}
+              note={ownFcs && totalOwn > ownFcs.length ? `(${ownFcs.length} sur ${totalOwn} affichées)` : null}
+            />
+            <Section
+              title="Fact-checks où il est mentionné" color="#8e44ad" bg="#f5f0ff"
+              items={aboutFcs}
+              note={aboutFcs && aboutFcs.length === 150 ? "(50 dernières affichées)" : null}
+            />
+          </>
+        )}
       </div>
     </div>
   );
