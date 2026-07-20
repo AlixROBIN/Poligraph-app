@@ -28,11 +28,14 @@ import requests as http_requests
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from collections import deque
+
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sklearn.feature_extraction import FeatureHasher
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import OneHotEncoder
 
 warnings.filterwarnings("ignore")
@@ -147,6 +150,163 @@ def load_data():
         logger.info(f"[API] élus chargés : {len(_df_elus)} lignes")
     else:
         _df_elus = pd.DataFrame()
+
+    # Construction de l'index RAG en arrière-plan après chargement des données
+    import threading as _threading
+    _threading.Thread(target=_rag_build, daemon=True).start()
+
+
+# ============================================================
+# RAG — Retrieval-Augmented Generation (TF-IDF, sklearn)
+# Indexe : scandales (CSV) + fact-checks (API poligraph.fr)
+# ============================================================
+
+_rag_vectorizer: "TfidfVectorizer | None" = None
+_rag_matrix     = None   # scipy sparse TF-IDF matrix
+_rag_docs: list = []     # [{"text": str, "source": str, "meta": dict}]
+
+
+def _rag_build() -> None:
+    """Construit l'index TF-IDF sur scandales CSV + fact-checks API."""
+    global _rag_vectorizer, _rag_matrix, _rag_docs
+    docs: list = []
+
+    # ── Source 1 : scandales (déjà chargés en mémoire) ────────────────────
+    sc = _df_scandales
+    if sc is not None and not sc.empty:
+        for _, row in sc.iterrows():
+            text = " ".join(filter(None, [
+                str(row.get("title", "")),
+                str(row.get("description", "")),
+                str(row.get("politician_name", "")),
+                str(row.get("category", "")),
+                str(row.get("party_short", "")),
+            ]))
+            docs.append({
+                "text":   text,
+                "source": "scandale",
+                "meta": {
+                    "titre":       str(row.get("title", "")),
+                    "politicien":  str(row.get("politician_name", "")),
+                    "parti":       str(row.get("party_short", "")),
+                    "catégorie":   str(row.get("category", "")),
+                    "statut":      str(row.get("status", "")),
+                    "année":       str(row.get("annee_faits", "")),
+                },
+            })
+
+    # ── Source 2 : fact-checks (API poligraph.fr) ─────────────────────────
+    try:
+        all_fc: list = []
+        page = 1
+        while len(all_fc) < 900 and page <= 10:
+            d = _pg("factchecks", {"limit": 100, "page": page}, cache=True)
+            batch = d.get("data") or []
+            if not batch:
+                break
+            all_fc.extend(batch)
+            page += 1
+
+        for fc in all_fc:
+            claim = fc.get("claimText") or ""
+            if not claim:
+                continue
+            pols = fc.get("politicians") or []
+            if isinstance(pols, str):
+                try:
+                    pols = ast.literal_eval(pols)
+                except Exception:
+                    pols = []
+            pol_names = " ".join(p.get("fullName", "") for p in pols if isinstance(p, dict))
+            docs.append({
+                "text":   f"{claim} {pol_names} {fc.get('source', '')}",
+                "source": "factcheck",
+                "meta": {
+                    "déclaration": claim[:200],
+                    "verdict":     fc.get("verdictRating"),
+                    "source":      fc.get("source"),
+                    "date":        (fc.get("publishedAt") or "")[:10],
+                    "url":         fc.get("sourceUrl") or "",
+                    "politiciens": pol_names,
+                },
+            })
+    except Exception as exc:
+        logger.warning(f"[RAG] fact-checks non indexés : {exc}")
+
+    if not docs:
+        logger.warning("[RAG] Aucun document à indexer — index vide")
+        return
+
+    _rag_docs = docs
+    vect = TfidfVectorizer(ngram_range=(1, 2), max_features=50_000,
+                           min_df=1, sublinear_tf=True)
+    _rag_matrix     = vect.fit_transform([d["text"] for d in docs])
+    _rag_vectorizer = vect
+    n_sc = sum(1 for d in docs if d["source"] == "scandale")
+    n_fc = sum(1 for d in docs if d["source"] == "factcheck")
+    logger.info(f"[RAG] Index prêt : {len(docs)} docs ({n_sc} scandales, {n_fc} fact-checks)")
+
+
+def _rag_search(query: str, source_filter: str = "all", k: int = 8) -> list:
+    """Retourne les k documents les plus proches de la requête."""
+    if _rag_vectorizer is None or _rag_matrix is None or not _rag_docs:
+        return []
+    q_vec = _rag_vectorizer.transform([query])
+    sims  = cosine_similarity(q_vec, _rag_matrix).flatten()
+    top   = sims.argsort()[::-1]
+    results = []
+    for idx in top:
+        if len(results) >= k:
+            break
+        if float(sims[idx]) < 0.04:
+            break
+        doc = _rag_docs[idx]
+        if source_filter != "all" and doc["source"] != source_filter:
+            continue
+        results.append({"score": round(float(sims[idx]), 3), "type": doc["source"], **doc["meta"]})
+    return results
+
+
+# ============================================================
+# Gardes-fous — rate limiting + détection injection de prompt
+# ============================================================
+
+_INJECTION_RE = re.compile(
+    r"ignore\s+(previous|all|your|the|above|ces|les|toutes?)\s+(instructions?|directives?|r[eè]gles?)|"
+    r"\bsystem\s*:\s*(?!Tu\s+es\s+PoliBot)|"
+    r"\bact\s+as\s+(?!an?\s+analyst)|"
+    r"\bjailbreak\b|"
+    r"\bDAN\b|"
+    r"forget\s+(all|your|previous|tout|tes|vos)|"
+    r"<\s*/?system\s*>|"
+    r"\[/?INST\]|"
+    r"###\s*System|"
+    r"you\s+are\s+now\s+(?!PoliBot)|"
+    r"tu\s+es\s+maintenant\s+(un?|une?)\s+(?!PoliBot)|"
+    r"pretend\s+(you\s+are|to\s+be)|"
+    r"fais\s+semblant\s+d.être",
+    flags=re.IGNORECASE,
+)
+
+_rate_buckets: dict = {}   # ip → deque[float] (timestamps)
+_RATE_WINDOW  = 60         # secondes
+_RATE_LIMIT   = 20         # requêtes max par fenêtre
+
+
+def _guard_input(text: str, client_ip: str = "") -> None:
+    """Bloque les inputs invalides, les injections et le rate-abuse."""
+    if len(text) > 600:
+        raise HTTPException(400, "Message trop long (max 600 caractères).")
+    if _INJECTION_RE.search(text):
+        raise HTTPException(400, "Message refusé.")
+    if client_ip:
+        now    = time.time()
+        bucket = _rate_buckets.setdefault(client_ip, deque())
+        while bucket and now - bucket[0] > _RATE_WINDOW:
+            bucket.popleft()
+        if len(bucket) >= _RATE_LIMIT:
+            raise HTTPException(429, "Trop de requêtes — réessayez dans 60 secondes.")
+        bucket.append(now)
 
 
 def get_model(name: str):
@@ -1614,14 +1774,16 @@ def predict_vote_endpoint(req: PredictVoteRequest):
 
 # ============================================================
 # Agent Chatbot — PoliBot (ReAct : Think → Act → Observe)
-# Backends : Groq (cloud) ou Ollama (local) selon LLM_BACKEND
+# Backends : Groq / Ollama / Claude selon LLM_BACKEND
 #
 # Variables d'environnement :
-#   LLM_BACKEND   = "groq" (défaut) | "ollama"
-#   GROQ_API_KEY  = clé Groq        (si backend=groq)
-#   GROQ_MODEL    = llama-3.1-8b-instant (défaut — 5× plus de quota que 70b)
-#   OLLAMA_URL    = http://localhost:11434 (défaut)
-#   OLLAMA_MODEL  = llama3.1:8b     (défaut — supporte le tool calling)
+#   LLM_BACKEND      = "ollama" (défaut) | "groq" | "claude"
+#   GROQ_API_KEY     = clé Groq           (si backend=groq)
+#   GROQ_MODEL       = llama-3.1-8b-instant (défaut)
+#   OLLAMA_URL       = http://localhost:11434 (défaut)
+#   OLLAMA_MODEL     = llama3.1:8b          (défaut)
+#   ANTHROPIC_API_KEY= clé Claude           (si backend=claude)
+#   CLAUDE_MODEL     = claude-opus-4-8      (défaut)
 # ============================================================
 
 _groq_client = None
@@ -1641,6 +1803,25 @@ def _get_groq():
         except ImportError:
             raise HTTPException(503, "Package 'groq' non installé. Faire : pip install groq")
     return _groq_client
+
+
+_anthropic_client = None
+
+def _get_anthropic():
+    global _anthropic_client
+    if _anthropic_client is None:
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise HTTPException(
+                503,
+                "ANTHROPIC_API_KEY non configurée. Créez une clé sur https://console.anthropic.com"
+            )
+        try:
+            import anthropic as _ant
+            _anthropic_client = _ant.Anthropic(api_key=api_key)
+        except ImportError:
+            raise HTTPException(503, "Package 'anthropic' non installé. Faire : pip install anthropic")
+    return _anthropic_client
 
 
 # Format Groq/OpenAI : {"type":"function","function":{name,description,parameters}}
@@ -1777,6 +1958,53 @@ AGENT_TOOLS = [
                     "parti": {"type": "string", "description": "Parti politique pour affiner (optionnel, ex: RN, LFI, LREM)"},
                 },
                 "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "semantic_search",
+            "description": (
+                "Recherche sémantique dans la base locale (258 scandales + 817 fact-checks). "
+                "Trouve des documents proches même sans mots-clés exacts. "
+                "À utiliser quand la recherche exacte (search_scandales, search_factchecks) ne donne pas de résultats, "
+                "ou pour des requêtes conceptuelles ('affaires similaires à', 'déclarations sur le même thème')."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query":  {"type": "string", "description": "Description en langage naturel de ce que vous cherchez"},
+                    "source": {"type": "string", "enum": ["all", "scandale", "factcheck"], "description": "Type de document (défaut: all)"},
+                    "limit":  {"type": "integer", "description": "Nombre de résultats (défaut 8, max 15)"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_factchecks",
+            "description": (
+                "Cherche parmi 817 fact-checks de politiciens français vérifiés par AFP Factuel, TF1 Info, Franceinfo, Le Monde… "
+                "Retourne les déclarations avec leur verdict (TRUE/FALSE/MISLEADING). "
+                "Utiliser pour répondre à des questions sur la véracité de propos tenus par des politiciens."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "q":       {"type": "string", "description": "Texte à chercher dans la déclaration vérifiée"},
+                    "verdict": {
+                        "type": "string",
+                        "enum": ["TRUE", "MOSTLY_TRUE", "HALF_TRUE", "MISLEADING",
+                                 "FALSE", "MOSTLY_FALSE", "UNVERIFIABLE"],
+                        "description": "Filtrer par verdict exact",
+                    },
+                    "source":  {"type": "string", "description": "Source du fact-check (ex: 'AFP Factuel', 'Le Monde')"},
+                    "limit":   {"type": "integer", "description": "Nombre de résultats (défaut 10, max 30)"},
+                },
+                "required": [],
             },
         },
     },
@@ -2031,6 +2259,46 @@ def _tool_analyze_political_figure(name: str, parti: str = ""):
     return result
 
 
+def _tool_semantic_search(query: str = "", source: str = "all", limit: int = 8) -> dict:
+    """Recherche sémantique TF-IDF dans la base locale (scandales + fact-checks)."""
+    if not query:
+        return {"erreur": "Paramètre 'query' manquant.", "résultats": []}
+    if _rag_vectorizer is None:
+        return {"info": "Index RAG en cours de construction, réessayez dans quelques secondes.", "résultats": []}
+    results = _rag_search(query, source_filter=source, k=min(int(limit), 15))
+    return {"total_trouvé": len(results), "résultats": results}
+
+
+def _tool_search_factchecks(q: str = "", verdict: str = "", source: str = "", limit: int = 10) -> dict:
+    """Cherche dans les 817 fact-checks via l'API poligraph.fr."""
+    import ast as _ast
+    try:
+        params: dict = {"limit": min(int(limit), 30), "page": 1}
+        if q:       params["search"] = q
+        if verdict: params["verdictRating"] = verdict
+        if source:  params["source"] = source
+        data  = _pg("factchecks", params)
+        items = data.get("data") or []
+        pag   = data.get("pagination") or {}
+        results = []
+        for fc in items:
+            pols = fc.get("politicians") or []
+            if isinstance(pols, str):
+                try: pols = _ast.literal_eval(pols)
+                except Exception: pols = []
+            results.append({
+                "déclaration": (fc.get("claimText") or "")[:200],
+                "verdict":     fc.get("verdictRating"),
+                "source":      fc.get("source"),
+                "date":        (fc.get("publishedAt") or "")[:10],
+                "url":         fc.get("sourceUrl") or "",
+                "politiciens": [p.get("fullName") for p in pols if isinstance(p, dict) and p.get("fullName")],
+            })
+        return {"total": pag.get("total", len(results)), "résultats": results}
+    except Exception as e:
+        return {"erreur": str(e), "résultats": []}
+
+
 def _execute_agent_tool(tool_name: str, tool_input: dict) -> dict:
     dispatch = {
         "search_scandales":        _tool_search_scandales,
@@ -2039,6 +2307,8 @@ def _execute_agent_tool(tool_name: str, tool_input: dict) -> dict:
         "get_recent_articles":     _tool_get_recent_articles,
         "get_politician_profile":  _tool_get_politician_profile,
         "analyze_political_figure": _tool_analyze_political_figure,
+        "search_factchecks":       _tool_search_factchecks,
+        "semantic_search":         _tool_semantic_search,
     }
     fn = dispatch.get(tool_name)
     if fn is None:
@@ -2066,6 +2336,7 @@ Si la question porte sur autre chose (recettes, sport, tech, géographie, histoi
 - **Scandales** : 258 affaires | Partis les plus représentés : RN (58), LR (39), LFI (29), RE (16), PS (11)
 - **Votes** : 9 871 scrutins | 3 601 adoptés (36,5%) · 6 270 rejetés
 - **Élus** : 35 095 profils dans la base
+- **Fact-checks** : 817 déclarations vérifiées | Sources : AFP Factuel, TF1 Info, Franceinfo, Le Monde, Libération, 20 Minutes
 
 ### Catégories de scandales exactes (à utiliser telles quelles dans category=)
 DETOURNEMENT_FONDS_PUBLICS · DIFFAMATION · INCITATION_HAINE · VIOLENCE · PRISE_ILLEGALE_INTERETS · EMPLOI_FICTIF · HARCELEMENT_MORAL · INJURE · FINANCEMENT_ILLEGAL_CAMPAGNE · FAVORITISME · ABUS_CONFIANCE · AGRESSION_SEXUELLE · CORRUPTION · ABUS_BIENS_SOCIAUX · FRAUDE_FISCALE · AUTRE
@@ -2090,6 +2361,15 @@ RN · LR · LFI · RE · PS · EELV · HOR · MoDem · NFP · UDI · PCF
 
 **Pour des votes sur un thème :**
 → `search_votes(q="budget", limit=10)` ou `search_votes(q="agriculture")`
+
+**Pour vérifier si un propos est vrai/faux :**
+→ `search_factchecks(q="immigration", limit=10)` ou `search_factchecks(verdict="FALSE", limit=20)`
+→ Pour chercher les mensonges d'un parti : `search_factchecks(q="[nom du parti]", verdict="FALSE")`
+
+**Pour une recherche sémantique (mots-clés inexacts, requête conceptuelle) :**
+→ `semantic_search(query="affaires de corruption liées à des marchés publics")` — trouve par similarité
+→ `semantic_search(query="fausses déclarations sur le chômage", source="factcheck")`
+→ À utiliser quand search_scandales/search_factchecks ne retournent rien
 
 ## 📰 Utilisation du sentiment médiatique (OBLIGATOIRE quand disponible)
 
@@ -2116,9 +2396,27 @@ Quand `analyze_political_figure` retourne des données de presse :
 _GROQ_MODEL   = os.getenv("GROQ_MODEL",   "llama-3.1-8b-instant")
 _OLLAMA_URL   = os.getenv("OLLAMA_URL",   "http://localhost:11434")
 _OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+_CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-4-8")
 
 # ── Cache texte Ollama (en mémoire, survit au lifetime du process) ──
 _ollama_txt_cache: dict[str, str] = {}
+
+# ── Indicateurs de performance du chatbot ──
+_chat_perf: list[dict] = []
+
+def _perf_log(backend: str, duration_ms: int, iterations: int,
+              tools_called: list, error: str = "") -> None:
+    import datetime as _dt
+    _chat_perf.append({
+        "ts":          _dt.datetime.now(_dt.timezone.utc).isoformat(),
+        "backend":     backend,
+        "duration_ms": duration_ms,
+        "iterations":  iterations,
+        "tools_called": tools_called,
+        "error":       error,
+    })
+    if len(_chat_perf) > 200:
+        _chat_perf.pop(0)
 
 
 def _ollama_simple(prompt: str, system: str = "", max_tokens: int = 300, cache_key: str = "") -> str:
@@ -2149,15 +2447,80 @@ def _ollama_simple(prompt: str, system: str = "", max_tokens: int = 300, cache_k
     return ""
 
 
+def _to_anthropic_format(messages: list, tools: list):
+    """Convert OpenAI-style messages + tools to Anthropic API format."""
+    system = ""
+    ant_msgs = []
+    ant_tools = [
+        {
+            "name":         t["function"]["name"],
+            "description":  t["function"].get("description", ""),
+            "input_schema": t["function"]["parameters"],
+        }
+        for t in tools if t.get("type") == "function"
+    ]
+
+    i = 0
+    while i < len(messages):
+        msg  = messages[i]
+        role = msg.get("role", "")
+
+        if role == "system":
+            system = msg.get("content", "")
+            i += 1
+
+        elif role == "user":
+            ant_msgs.append({"role": "user", "content": msg.get("content", "")})
+            i += 1
+
+        elif role == "assistant":
+            blocks = []
+            if msg.get("content"):
+                blocks.append({"type": "text", "text": msg["content"]})
+            for tc in (msg.get("tool_calls") or []):
+                try:
+                    inp = json.loads(tc["function"]["arguments"])
+                except Exception:
+                    inp = {}
+                blocks.append({
+                    "type":  "tool_use",
+                    "id":    tc.get("id") or f"toolu_{len(blocks)}",
+                    "name":  tc["function"]["name"],
+                    "input": inp,
+                })
+            if not blocks:
+                blocks.append({"type": "text", "text": ""})
+            ant_msgs.append({"role": "assistant", "content": blocks})
+            i += 1
+
+        elif role == "tool":
+            # Group consecutive tool results into one user message
+            tool_results = []
+            while i < len(messages) and messages[i].get("role") == "tool":
+                tm = messages[i]
+                tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": tm.get("tool_call_id", ""),
+                    "content":     tm.get("content", ""),
+                })
+                i += 1
+            ant_msgs.append({"role": "user", "content": tool_results})
+
+        else:
+            i += 1
+
+    return system, ant_msgs, ant_tools
+
+
 def _llm_complete(messages: list, tools: list) -> dict:
     """
     Appel LLM unifié — retourne un dict normalisé :
       {"finish_reason": str, "content": str, "tool_calls": list}
 
     Backend sélectionné via LLM_BACKEND :
-      - "groq"   (défaut) : cloud Groq, nécessite GROQ_API_KEY
-      - "ollama" : modèle local via Ollama (llama3.1:8b recommandé)
-        → installer : https://ollama.com  puis : ollama pull llama3.1:8b
+      - "ollama" (défaut) : modèle local via Ollama
+      - "groq"            : cloud Groq, nécessite GROQ_API_KEY
+      - "claude"          : Anthropic Claude, nécessite ANTHROPIC_API_KEY
     """
     backend = os.getenv("LLM_BACKEND", "ollama").lower()
 
@@ -2183,7 +2546,38 @@ def _llm_complete(messages: list, tools: list) -> dict:
             "tool_calls":    msg.get("tool_calls") or [],
         }
 
-    # Groq (défaut)
+    if backend == "claude":
+        client = _get_anthropic()
+        system, ant_msgs, ant_tools = _to_anthropic_format(messages, tools)
+        kwargs: dict = {
+            "model":      _CLAUDE_MODEL,
+            "max_tokens": 4096,
+            "messages":   ant_msgs,
+        }
+        if system:
+            kwargs["system"] = system
+        if ant_tools:
+            kwargs["tools"]       = ant_tools
+            kwargs["tool_choice"] = {"type": "auto"}
+        response = client.messages.create(**kwargs)
+        content    = ""
+        tool_calls = []
+        for block in response.content:
+            if block.type == "text":
+                content += block.text
+            elif block.type == "tool_use":
+                tool_calls.append({
+                    "id":       block.id,
+                    "type":     "function",
+                    "function": {
+                        "name":      block.name,
+                        "arguments": json.dumps(block.input, ensure_ascii=False),
+                    },
+                })
+        finish = "tool_calls" if response.stop_reason == "tool_use" else "stop"
+        return {"finish_reason": finish, "content": content, "tool_calls": tool_calls}
+
+    # Groq
     client   = _get_groq()
     response = client.chat.completions.create(
         model=_GROQ_MODEL,
@@ -2210,62 +2604,85 @@ def _llm_complete(messages: list, tools: list) -> dict:
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=600, description="Question à poser à PoliBot (max 600 caractères)")
     history: list = []
 
 
 @app.post("/api/chat")
-def chat_endpoint(req: ChatRequest):
-    """Agent ReAct PoliBot — Groq ou Ollama selon LLM_BACKEND."""
+def chat_endpoint(req: ChatRequest, request: Request):
+    """Agent ReAct PoliBot — Groq / Ollama / Claude selon LLM_BACKEND."""
+    _guard_input(req.message, request.client.host if request.client else "")
+    import time as _time
+    t0      = _time.monotonic()
+    backend = os.getenv("LLM_BACKEND", "ollama").lower()
     messages = [{"role": "system", "content": _AGENT_SYSTEM}]
     messages += [m for m in req.history if m.get("role") in ("user", "assistant", "tool")]
     messages.append({"role": "user", "content": req.message})
-    steps = []
+    steps        = []
+    tools_called = []
+    iterations   = 0
 
-    for _ in range(6):
-        result = _llm_complete(messages, AGENT_TOOLS)
+    try:
+        for _ in range(6):
+            iterations += 1
+            result = _llm_complete(messages, AGENT_TOOLS)
 
-        if result["finish_reason"] == "tool_calls" and result["tool_calls"]:
-            messages.append({
-                "role":       "assistant",
-                "content":    result["content"],
-                "tool_calls": result["tool_calls"],
-            })
-            for tc in result["tool_calls"]:
-                try:
-                    args = json.loads(tc["function"]["arguments"])
-                except (json.JSONDecodeError, KeyError):
-                    args = {}
-                tool_result = _execute_agent_tool(tc["function"]["name"], args)
-                steps.append({"outil": tc["function"]["name"], "paramètres": args, "résultat": tool_result})
+            if result["finish_reason"] == "tool_calls" and result["tool_calls"]:
                 messages.append({
-                    "role":         "tool",
-                    "tool_call_id": tc.get("id", ""),
-                    "content":      json.dumps(tool_result, ensure_ascii=False, default=str),
+                    "role":       "assistant",
+                    "content":    result["content"],
+                    "tool_calls": result["tool_calls"],
                 })
-        else:
-            return {"response": result["content"], "steps": steps}
+                for tc in result["tool_calls"]:
+                    try:
+                        args = json.loads(tc["function"]["arguments"])
+                    except (json.JSONDecodeError, KeyError):
+                        args = {}
+                    name = tc["function"]["name"]
+                    tools_called.append(name)
+                    tool_result = _execute_agent_tool(name, args)
+                    steps.append({"outil": name, "paramètres": args, "résultat": tool_result})
+                    messages.append({
+                        "role":         "tool",
+                        "tool_call_id": tc.get("id", ""),
+                        "content":      json.dumps(tool_result, ensure_ascii=False, default=str),
+                    })
+            else:
+                _perf_log(backend, int((_time.monotonic() - t0) * 1000), iterations, tools_called)
+                return {"response": result["content"], "steps": steps}
 
-    return {"response": "Limite d'itérations atteinte.", "steps": steps}
+        _perf_log(backend, int((_time.monotonic() - t0) * 1000), iterations, tools_called)
+        return {"response": "Limite d'itérations atteinte.", "steps": steps}
+
+    except Exception as exc:
+        _perf_log(backend, int((_time.monotonic() - t0) * 1000), iterations, tools_called, str(exc))
+        raise
 
 
 @app.post("/api/chat/stream")
-async def chat_stream_endpoint(req: ChatRequest):
+async def chat_stream_endpoint(req: ChatRequest, request: Request):
     """
     Variante SSE de /api/chat — stream les étapes ReAct au client en temps réel.
     Contourne le timeout HTTP 30s de Render : la connexion streaming reste ouverte.
     Chaque étape (outil appelé) est envoyée dès qu'elle est disponible.
     """
+    _guard_input(req.message, request.client.host if request.client else "")
     loop = asyncio.get_event_loop()
 
     async def generate():
+        import time as _time
+        t0      = _time.monotonic()
+        backend = os.getenv("LLM_BACKEND", "ollama").lower()
         messages = [{"role": "system", "content": _AGENT_SYSTEM}]
         messages += [m for m in req.history if m.get("role") in ("user", "assistant", "tool")]
         messages.append({"role": "user", "content": req.message})
-        steps = []
+        steps        = []
+        tools_called = []
+        iterations   = 0
 
         try:
             for _ in range(6):
+                iterations += 1
                 captured = {"msgs": list(messages)}
                 result = await loop.run_in_executor(
                     None,
@@ -2285,8 +2702,10 @@ async def chat_stream_endpoint(req: ChatRequest):
                         except (json.JSONDecodeError, KeyError):
                             args = {}
 
-                        tool_result = _execute_agent_tool(tc["function"]["name"], args)
-                        step = {"outil": tc["function"]["name"], "paramètres": args, "résultat": tool_result}
+                        name = tc["function"]["name"]
+                        tools_called.append(name)
+                        tool_result = _execute_agent_tool(name, args)
+                        step = {"outil": name, "paramètres": args, "résultat": tool_result}
                         steps.append(step)
 
                         yield (
@@ -2302,6 +2721,7 @@ async def chat_stream_endpoint(req: ChatRequest):
                         })
 
                 else:
+                    _perf_log(backend, int((_time.monotonic() - t0) * 1000), iterations, tools_called)
                     yield (
                         "data: "
                         + json.dumps(
@@ -2312,6 +2732,7 @@ async def chat_stream_endpoint(req: ChatRequest):
                     )
                     return
 
+            _perf_log(backend, int((_time.monotonic() - t0) * 1000), iterations, tools_called)
             yield (
                 "data: "
                 + json.dumps(
@@ -2322,6 +2743,7 @@ async def chat_stream_endpoint(req: ChatRequest):
             )
 
         except Exception as exc:
+            _perf_log(backend, int((_time.monotonic() - t0) * 1000), iterations, tools_called, str(exc))
             yield "data: " + json.dumps({"type": "error", "message": str(exc)}) + "\n\n"
 
     from fastapi.responses import StreamingResponse as _SR
@@ -2334,6 +2756,49 @@ async def chat_stream_endpoint(req: ChatRequest):
             "Connection":       "keep-alive",
         },
     )
+
+
+@app.get("/api/chat/metrics")
+def chat_metrics():
+    """Indicateurs de performance du chatbot PoliBot (200 dernières requêtes)."""
+    if not _chat_perf:
+        return {"total": 0, "message": "Aucune donnée — faites d'abord quelques requêtes au chatbot."}
+
+    total     = len(_chat_perf)
+    successes = [p for p in _chat_perf if not p["error"]]
+    errors    = [p for p in _chat_perf if p["error"]]
+    durations = [p["duration_ms"] for p in successes]
+    iters     = [p["iterations"]  for p in successes]
+
+    backends: dict = {}
+    for p in _chat_perf:
+        backends[p["backend"]] = backends.get(p["backend"], 0) + 1
+
+    tool_counts: dict = {}
+    for p in _chat_perf:
+        for t in p["tools_called"]:
+            tool_counts[t] = tool_counts.get(t, 0) + 1
+
+    return {
+        "total":           total,
+        "succès":          len(successes),
+        "erreurs":         len(errors),
+        "taux_succès_pct": round(len(successes) / total * 100, 1),
+        "durée_moy_ms":    round(sum(durations) / len(durations)) if durations else 0,
+        "durée_min_ms":    min(durations) if durations else 0,
+        "durée_max_ms":    max(durations) if durations else 0,
+        "itérations_moy":  round(sum(iters) / len(iters), 1) if iters else 0,
+        "backends":        backends,
+        "outils_utilisés": dict(sorted(tool_counts.items(), key=lambda x: -x[1])),
+        "dernières_10":    _chat_perf[-10:][::-1],
+    }
+
+
+@app.delete("/api/chat/metrics")
+def chat_metrics_reset():
+    """Vide le buffer de métriques."""
+    _chat_perf.clear()
+    return {"message": "Métriques réinitialisées."}
 
 
 if __name__ == "__main__":

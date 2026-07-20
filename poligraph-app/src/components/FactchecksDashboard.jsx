@@ -67,6 +67,111 @@ function RankingCard({ title, subtitle, items, metric, color, onClickPolitician 
   );
 }
 
+const VERDICT_LABELS = {
+  TRUE:          { label: "Vrai",           color: "#27ae60", bg: "#eafaf1" },
+  MOSTLY_TRUE:   { label: "Plutôt vrai",    color: "#2ecc71", bg: "#f0faf4" },
+  HALF_TRUE:     { label: "Mi-vrai",        color: "#f39c12", bg: "#fef9e7" },
+  MISLEADING:    { label: "Trompeur",       color: "#e67e22", bg: "#fdf2e9" },
+  FALSE:         { label: "Faux",           color: "#e74c3c", bg: "#fdedec" },
+  MOSTLY_FALSE:  { label: "Plutôt faux",    color: "#c0392b", bg: "#fde8e6" },
+  UNVERIFIABLE:  { label: "Invérifiable",   color: "#95a5a6", bg: "#f2f3f4" },
+};
+
+function SearchTab() {
+  const [query,        setQuery]        = useState("");
+  const [verdictFilter,setVerdictFilter] = useState("");
+  const [results,      setResults]      = useState(null);
+  const [searching,    setSearching]    = useState(false);
+
+  const doSearch = () => {
+    setSearching(true);
+    const params = new URLSearchParams({ limit: 30 });
+    if (query)         params.set("q", query);
+    if (verdictFilter) params.set("verdictRating", verdictFilter);
+    fetch(`${BASE}/proxy/factchecks?${params}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setResults(d?.data || []))
+      .catch(() => setResults([]))
+      .finally(() => setSearching(false));
+  };
+
+  return (
+    <div style={{ background: "#fff", borderRadius: 14, padding: "1.4rem", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", border: "1px solid #e8ecf8" }}>
+      <h3 style={{ margin: "0 0 1rem", fontSize: 15, color: "#1a2e5a" }}>Rechercher un fact-check</h3>
+
+      {/* Filtres */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: "1rem" }}>
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && doSearch()}
+          placeholder="Chercher une déclaration…"
+          style={{ flex: 1, minWidth: 200, padding: "8px 12px", borderRadius: 8, border: "1px solid #d0d8f0", fontSize: 13, outline: "none" }}
+        />
+        <select
+          value={verdictFilter}
+          onChange={e => setVerdictFilter(e.target.value)}
+          style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #d0d8f0", fontSize: 13, background: "#fff", cursor: "pointer" }}
+        >
+          <option value="">Tous les verdicts</option>
+          {Object.entries(VERDICT_LABELS).map(([k, v]) => (
+            <option key={k} value={k}>{v.label}</option>
+          ))}
+        </select>
+        <button onClick={doSearch} disabled={searching} style={{
+          padding: "8px 20px", borderRadius: 8, border: "none", cursor: "pointer",
+          background: "#1a3a6e", color: "#fff", fontWeight: 700, fontSize: 13,
+          opacity: searching ? 0.7 : 1,
+        }}>
+          {searching ? "Recherche…" : "Chercher"}
+        </button>
+      </div>
+
+      {/* Résultats */}
+      {results === null && (
+        <p style={{ color: "#aaa", fontSize: 13, textAlign: "center", padding: "2rem 0" }}>
+          Entrez un mot-clé et appuyez sur Chercher
+        </p>
+      )}
+      {results !== null && results.length === 0 && (
+        <p style={{ color: "#aaa", fontSize: 13, textAlign: "center", padding: "2rem 0" }}>
+          Aucun fact-check trouvé pour ces critères.
+        </p>
+      )}
+      {results !== null && results.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <p style={{ margin: "0 0 6px", fontSize: 12, color: "#888" }}>{results.length} résultat(s)</p>
+          {results.map((fc, i) => {
+            const cfg = VERDICT_LABELS[fc.verdictRating] || { label: fc.verdictRating, color: "#888", bg: "#f5f5f5" };
+            const pols = (fc.politicians || []).map(p => p?.fullName).filter(Boolean);
+            return (
+              <a key={i} href={fc.sourceUrl} target="_blank" rel="noreferrer"
+                style={{ display: "block", textDecoration: "none", color: "inherit", padding: "12px 14px", borderRadius: 10, border: "1px solid #e8ecf8", background: "#fafbfe", transition: "box-shadow 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,0,0,0.10)"}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}
+              >
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
+                  <span style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}55`, borderRadius: 12, padding: "2px 10px", fontSize: 11, fontWeight: 700 }}>
+                    {cfg.label}
+                  </span>
+                  <span style={{ fontSize: 11, color: "#888" }}>{fc.source}</span>
+                  {pols.length > 0 && <span style={{ fontSize: 11, color: "#8e44ad", fontWeight: 600 }}>{pols.join(", ")}</span>}
+                  <span style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}>
+                    {fc.publishedAt ? new Date(fc.publishedAt).toLocaleDateString("fr-FR") : ""}
+                  </span>
+                </div>
+                <div style={{ fontSize: 13, color: "#1a2e5a", lineHeight: 1.5 }}>
+                  « {(fc.claimText || "").slice(0, 200)}{(fc.claimText || "").length > 200 ? "…" : ""} »
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FactchecksDashboard({ onNavigate }) {
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
@@ -115,8 +220,8 @@ export default function FactchecksDashboard({ onNavigate }) {
       </div>
 
       {/* Onglets */}
-      <div style={{ display: "flex", gap: 8, marginBottom: "1.2rem" }}>
-        {[["factchecks","Politiciens"], ["parties","Partis"], ["sources","Sources & Biais"]].map(([id, label]) => (
+      <div style={{ display: "flex", gap: 8, marginBottom: "1.2rem", flexWrap: "wrap" }}>
+        {[["factchecks","Politiciens"], ["parties","Partis"], ["sources","Sources & Biais"], ["search","Recherche"]].map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)} style={{
             padding: "8px 18px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600,
             background: tab === id ? "#1a3a6e" : "#e8ecf8",
@@ -199,6 +304,9 @@ export default function FactchecksDashboard({ onNavigate }) {
           />
         </div>
       )}
+
+      {/* ── Onglet Recherche ── */}
+      {tab === "search" && <SearchTab />}
 
       {/* ── Onglet Sources & Biais ── */}
       {tab === "sources" && (
