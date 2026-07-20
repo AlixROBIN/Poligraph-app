@@ -138,14 +138,14 @@ function PoliticianFcPanel({ politician, onClose, onSelectFc }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!politician?.slug) return;
+    if (!politician?.name) return;
     setLoading(true);
-    fetch(`${BASE}/proxy/politiques/${politician.slug}/factchecks?limit=50`)
+    fetch(`${BASE}/search/factchecks?q=${encodeURIComponent(politician.name)}&limit=50`)
       .then(r => r.ok ? r.json() : null)
       .then(d => setFcs(d?.data || []))
       .catch(() => setFcs([]))
       .finally(() => setLoading(false));
-  }, [politician?.slug]);
+  }, [politician?.name]);
 
   if (!politician) return null;
 
@@ -279,17 +279,21 @@ function RankingCard({ title, subtitle, items, metric, color, onClickPolitician 
 function SearchTab({ onSelectFc }) {
   const [query,         setQuery]         = useState("");
   const [verdictFilter, setVerdictFilter] = useState("");
-  const [results,       setResults]       = useState(null);
+  const [results,       setResults]       = useState(null);   // array | null
+  const [corpusSize,    setCorpusSize]    = useState(null);
   const [searching,     setSearching]     = useState(false);
 
   const doSearch = () => {
     setSearching(true);
-    const params = new URLSearchParams({ limit: 30 });
+    const params = new URLSearchParams({ limit: 50 });
     if (query)         params.set("q", query);
     if (verdictFilter) params.set("verdictRating", verdictFilter);
-    fetch(`${BASE}/proxy/factchecks?${params}`)
+    fetch(`${BASE}/search/factchecks?${params}`)
       .then(r => r.ok ? r.json() : null)
-      .then(d => setResults(d?.data || []))
+      .then(d => {
+        setResults(d?.data || []);
+        setCorpusSize(d?.searched_corpus || null);
+      })
       .catch(() => setResults([]))
       .finally(() => setSearching(false));
   };
@@ -338,7 +342,7 @@ function SearchTab({ onSelectFc }) {
       {results !== null && results.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <p style={{ margin: "0 0 6px", fontSize: 12, color: "#888" }}>
-            {results.length} résultat(s) — cliquer pour voir l'analyse avant d'accéder à la source
+            {results.length} résultat(s) sur {corpusSize || "?"} fact-checks analysés — cliquer pour voir l'analyse
           </p>
           {results.map((fc, i) => {
             const cfg  = verdictCfg(fc.verdictRating);

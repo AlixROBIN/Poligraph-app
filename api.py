@@ -967,6 +967,75 @@ def proxy_politiques_factchecks(slug: str, limit: int = 20, page: int = 1):
     return _pg(f"politiques/{slug}/factchecks", {"limit": limit, "page": page})
 
 
+def _all_factchecks_cached() -> list:
+    """Récupère (et met en cache 30 min) tous les fact-checks paginés."""
+    cache_key = ("all_fc_raw", "v1")
+    entry = _pg_cache.get(cache_key)
+    if entry and time.time() - entry["at"] < 1800:
+        return entry["data"]
+    all_fc: list = []
+    page = 1
+    while len(all_fc) < 1200 and page <= 12:
+        try:
+            d = _pg("factchecks", {"limit": 100, "page": page}, cache=True)
+            batch = d.get("data") or []
+            if not batch:
+                break
+            all_fc.extend(batch)
+            if len(batch) < 100:
+                break
+            page += 1
+        except Exception:
+            break
+    _pg_cache[cache_key] = {"data": all_fc, "at": time.time()}
+    return all_fc
+
+
+@app.get("/api/search/factchecks")
+def search_factchecks_local(q: str = "", verdictRating: str = "", source: str = "", limit: int = 50):
+    """
+    Recherche locale multi-champs sur tous les fact-checks cachés.
+    Tokenise la requête et cherche dans : claimText, claimant, noms des politiciens.
+    Normalise les accents → "rima hassan apologie terrorisme" trouve des résultats.
+    """
+    import unicodedata, re as _re
+
+    def _norm(s: str) -> str:
+        return ''.join(c for c in unicodedata.normalize("NFD", (s or "").lower())
+                       if unicodedata.category(c) != "Mn")
+
+    results = _all_factchecks_cached()
+
+    if verdictRating:
+        results = [fc for fc in results if fc.get("verdictRating") == verdictRating]
+    if source:
+        results = [fc for fc in results if fc.get("source", "") == source]
+
+    if q:
+        tokens = [t for t in _re.split(r'\s+', _norm(q).strip()) if len(t) > 1]
+
+        def _score(fc):
+            parts = [
+                fc.get("claimText") or "",
+                fc.get("claimant") or "",
+                fc.get("articleTitle") or "",
+                fc.get("source") or "",
+            ]
+            for p in (fc.get("politicians") or []):
+                parts.append(p.get("fullName") or "")
+            text = _norm(" ".join(parts))
+            return sum(2 if tok in text else 0 for tok in tokens)
+
+        scored = [(fc, _score(fc)) for fc in results]
+        scored = [x for x in scored if x[1] > 0]
+        scored.sort(key=lambda x: -x[1])
+        results = [fc for fc, _ in scored[:limit]]
+    else:
+        results = sorted(results, key=lambda fc: fc.get("publishedAt") or "", reverse=True)[:limit]
+
+    return {"data": results, "total": len(results), "searched_corpus": len(_all_factchecks_cached())}
+
+
 @app.get("/api/proxy/politiques/{slug}/bio")
 def get_politician_bio(slug: str):
     """Génère une biographie courte via Ollama à partir des mandats et scandales de l'élu."""
