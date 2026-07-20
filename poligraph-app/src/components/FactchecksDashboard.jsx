@@ -235,20 +235,52 @@ export default function FactchecksDashboard({ onNavigate }) {
         <>
           <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem" }}>
             <RankingCard
-              title="Politiciens les plus fiables"
-              subtitle="Par proportion de propos vérifiés vrais (≥5 fact-checks)"
+              title="Déclarations les plus vraies"
+              subtitle="Sur les propos tenus PAR le politicien (≥3 fact-checks de ses propres déclarations)"
               items={data.most_reliable || []}
               metric="pct_vrai" color="#27ae60"
               onClickPolitician={p => onNavigate("annuaire", { q: p.name })}
             />
             <RankingCard
-              title="Politiciens les moins fiables"
-              subtitle="Par proportion de propos vérifiés faux (≥5 fact-checks)"
+              title="Déclarations les plus fausses"
+              subtitle="Sur les propos tenus PAR le politicien — ne tient pas compte de ce que d'autres disent sur lui"
               items={data.least_reliable || []}
               metric="pct_faux" color="#e74c3c"
               onClickPolitician={p => onNavigate("annuaire", { q: p.name })}
             />
           </div>
+
+          {/* Les plus mentionnés */}
+          {(data.most_mentioned || []).length > 0 && (
+            <div style={{ background: "#fff", borderRadius: 14, padding: "1.4rem", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", border: "1px solid #e8ecf8", marginBottom: "1.5rem" }}>
+              <h3 style={{ margin: "0 0 4px", fontSize: 15, color: "#1a2e5a" }}>Politiciens les plus impliqués</h3>
+              <p style={{ margin: "0 0 1rem", fontSize: 11, color: "#aaa" }}>
+                Toutes apparitions confondues — déclarations faites par eux + déclarations d'autres à leur sujet
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {(data.most_mentioned || []).map((p, i) => (
+                  <div key={i}
+                    onClick={() => onNavigate("annuaire", { q: p.name })}
+                    style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "6px 0", borderBottom: "1px solid #f5f5f5" }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = "0.7"}
+                    onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                    <span style={{ fontSize: 12, color: "#aaa", width: 20, textAlign: "right" }}>{i+1}.</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#1a2e5a", flex: 1 }}>{p.name}</span>
+                    <span style={{ fontSize: 11, color: "#888" }}>{p.party}</span>
+                    <div style={{ textAlign: "right" }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: "#1a3a6e" }}>{p.total_mentions}</span>
+                      <span style={{ fontSize: 11, color: "#aaa", marginLeft: 4 }}>fact-checks</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "#888", textAlign: "right", minWidth: 120 }}>
+                      <span style={{ color: "#8e44ad" }}>{p.nb_déclarations} décl.</span>
+                      {" · "}
+                      <span style={{ color: "#555" }}>{p.nb_mentions} mentions</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Répartition globale */}
           <div style={{ background: "#fff", borderRadius: 14, padding: "1.4rem", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", border: "1px solid #e8ecf8", marginBottom: "1.5rem" }}>

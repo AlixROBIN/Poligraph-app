@@ -1019,7 +1019,7 @@ def dashboard_factchecks():
     Agrège tous les fact-checks (817) depuis poligraph.fr.
     Cache 30 minutes — calcule classements politiciens, partis, verdicts, sources.
     """
-    cache_key = ("dashboard_fc", "v1")
+    cache_key = ("dashboard_fc", "v2")
     entry = _pg_cache.get(cache_key)
     if entry and time.time() - entry["at"] < 1800:
         return entry["data"]
@@ -1065,42 +1065,96 @@ def dashboard_factchecks():
         }
 
     # ── Agrégation par politicien ─────────────────────────────────────────
+    # own_fc  = déclarations FAITES PAR le politicien → fiabilité personnelle
+    # about_fc = déclarations À SON SUJET faites par d'autres → réputation/exposition
     by_pol: dict = {}
     for fc in all_fc:
+        claimant = (fc.get("claimant") or "").strip().lower()
         pols = fc.get("politicians") or []
         if isinstance(pols, str):
-            import ast as _ast
-            try: pols = _ast.literal_eval(pols)
-            except: pols = []
+            try: pols = ast.literal_eval(pols)
+            except Exception: pols = []
+        # Identifie le slug du locuteur parmi les politiciens listés
+        claimant_slug = None
+        for p in pols:
+            if p.get("fullName", "").strip().lower() == claimant:
+                claimant_slug = p.get("slug")
+                break
         for p in pols:
             slug = p.get("slug") or ""
             if not slug:
                 continue
             if slug not in by_pol:
-                by_pol[slug] = {"name": p.get("fullName", slug), "party": (p.get("currentParty") or {}).get("shortName", ""), "fc": []}
-            by_pol[slug]["fc"].append(fc)
-    pol_scores = [{"slug": s, "name": d["name"], "party": d["party"], **score(d["fc"])}
-                  for s, d in by_pol.items() if len(d["fc"]) >= 5]
-    most_reliable  = sorted(pol_scores, key=lambda x: -x["pct_vrai"])[:10]
-    least_reliable = sorted(pol_scores, key=lambda x: -x["pct_faux"])[:10]
+                by_pol[slug] = {
+                    "name":     p.get("fullName", slug),
+                    "party":    (p.get("currentParty") or {}).get("shortName", ""),
+                    "own_fc":   [],   # claims BY this politician
+                    "about_fc": [],   # claims ABOUT this politician
+                }
+            if slug == claimant_slug:
+                by_pol[slug]["own_fc"].append(fc)
+            else:
+                by_pol[slug]["about_fc"].append(fc)
+
+    pol_honesty = [
+        {
+            "slug":          s,
+            "name":          d["name"],
+            "party":         d["party"],
+            "nb_déclarations": len(d["own_fc"]),
+            "nb_mentions":   len(d["about_fc"]),
+            **score(d["own_fc"]),
+        }
+        for s, d in by_pol.items() if len(d["own_fc"]) >= 3
+    ]
+    most_reliable  = sorted(pol_honesty, key=lambda x: -x["pct_vrai"])[:10]
+    least_reliable = sorted(pol_honesty, key=lambda x: -x["pct_faux"])[:10]
+
+    # Les plus mentionnés dans des fact-checks (toutes déclarations confondues)
+    most_mentioned = sorted(
+        [{"slug": s, "name": d["name"], "party": d["party"],
+          "total_mentions": len(d["own_fc"]) + len(d["about_fc"]),
+          "nb_déclarations": len(d["own_fc"]), "nb_mentions": len(d["about_fc"])}
+         for s, d in by_pol.items()],
+        key=lambda x: -x["total_mentions"]
+    )[:10]
 
     # ── Agrégation par parti ──────────────────────────────────────────────
+    # Même distinction : own = locuteur du parti, about = mentionné
     by_party: dict = {}
     for fc in all_fc:
+        claimant = (fc.get("claimant") or "").strip().lower()
         pols = fc.get("politicians") or []
         if isinstance(pols, str):
-            import ast as _ast
-            try: pols = _ast.literal_eval(pols)
-            except: pols = []
+            try: pols = ast.literal_eval(pols)
+            except Exception: pols = []
+        claimant_slug = None
+        for p in pols:
+            if p.get("fullName", "").strip().lower() == claimant:
+                claimant_slug = p.get("slug")
+                break
         for p in pols:
             party = (p.get("currentParty") or {}).get("shortName") or ""
             if not party:
                 continue
             if party not in by_party:
-                by_party[party] = {"name": (p.get("currentParty") or {}).get("name", party), "color": (p.get("currentParty") or {}).get("color", "#999"), "fc": []}
-            by_party[party]["fc"].append(fc)
-    party_scores = [{"short": s, "name": d["name"], "color": d["color"], **score(d["fc"])}
-                    for s, d in by_party.items() if len(d["fc"]) >= 5]
+                by_party[party] = {
+                    "name":     (p.get("currentParty") or {}).get("name", party),
+                    "color":    (p.get("currentParty") or {}).get("color", "#999"),
+                    "own_fc":   [],
+                    "about_fc": [],
+                }
+            if p.get("slug") == claimant_slug:
+                by_party[party]["own_fc"].append(fc)
+            else:
+                by_party[party]["about_fc"].append(fc)
+
+    party_scores = [
+        {"short": s, "name": d["name"], "color": d["color"],
+         "nb_déclarations": len(d["own_fc"]), "nb_mentions": len(d["about_fc"]),
+         **score(d["own_fc"])}
+        for s, d in by_party.items() if len(d["own_fc"]) >= 3
+    ]
     most_reliable_p  = sorted(party_scores, key=lambda x: -x["pct_vrai"])[:8]
     least_reliable_p = sorted(party_scores, key=lambda x: -x["pct_faux"])[:8]
 
@@ -1119,6 +1173,7 @@ def dashboard_factchecks():
         "least_reliable":    least_reliable,
         "most_reliable_p":   most_reliable_p,
         "least_reliable_p":  least_reliable_p,
+        "most_mentioned":    most_mentioned,
     }
     _pg_cache[cache_key] = {"data": result, "at": time.time()}
     return result
@@ -2393,7 +2448,7 @@ Quand `analyze_political_figure` retourne des données de presse :
 - Indique clairement si une donnée est absente
 - Sois précis et concis — pas de rembourrage"""
 
-_GROQ_MODEL   = os.getenv("GROQ_MODEL",   "llama-3.1-70b-versatile")
+_GROQ_MODEL   = os.getenv("GROQ_MODEL",   "llama-3.3-70b-versatile")
 _OLLAMA_URL   = os.getenv("OLLAMA_URL",   "http://localhost:11434")
 _OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 _CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-4-8")
@@ -2585,7 +2640,7 @@ def _llm_complete(messages: list, tools: list) -> dict:
         tools=tools,
         tool_choice="auto",
         max_tokens=1024,
-        temperature=0.3,
+        temperature=0.0,
     )
     choice = response.choices[0]
     msg    = choice.message
