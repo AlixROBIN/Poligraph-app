@@ -504,7 +504,8 @@ function MatchTab() {
   const [idx,      setIdx]      = useState(0);
   const [votes,    setVotes]    = useState({});
   const [done,     setDone]     = useState(false);
-  const [animDir,  setAnimDir]  = useState(null);
+  const [animDir,    setAnimDir]    = useState(null);
+  const [showDetail, setShowDetail] = useState(false);
 
   const total = PROPOSITIONS.length;
   const current = PROPOSITIONS[idx];
@@ -512,6 +513,7 @@ function MatchTab() {
   const vote = (dir) => {
     if (animDir) return;
     setAnimDir(dir);
+    setShowDetail(false);
     setTimeout(() => {
       const newVotes = { ...votes, [current.id]: dir };
       setVotes(newVotes);
@@ -619,6 +621,21 @@ function MatchTab() {
         <div style={{ fontSize: 17, fontWeight: 700, color: "#1a2e5a", lineHeight: 1.55 }}>
           « {current.texte} »
         </div>
+        {current.detail && (
+          <div style={{ marginTop: 14 }}>
+            <button
+              onClick={() => setShowDetail(v => !v)}
+              style={{ background: "none", border: "1px solid #c8d0e8", borderRadius: 8, padding: "4px 12px", fontSize: 12, color: "#5a7abf", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+            >
+              ℹ️ {showDetail ? "Masquer le contexte" : "En savoir plus"}
+            </button>
+            {showDetail && (
+              <div style={{ marginTop: 10, padding: "12px 14px", background: "#f4f6fb", borderRadius: 10, fontSize: 12, color: "#444", lineHeight: 1.6, textAlign: "left" }}>
+                {current.detail}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Boutons */}

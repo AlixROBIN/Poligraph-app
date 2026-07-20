@@ -20,7 +20,8 @@
     { "id": "ruffin",       "nom": "François Ruffin",         "parti": "Debout!",                    "couleur": "#e74c3c", "emoji": "✊" },
     { "id": "roussel",      "nom": "Fabien Roussel",          "parti": "Parti Communiste Français",  "couleur": "#d32f2f", "emoji": "⚒️" },
     { "id": "tondelier",    "nom": "Marine Tondelier",        "parti": "Europe Écologie Les Verts",  "couleur": "#1b8a3c", "emoji": "🌿" },
-    { "id": "zemmour",      "nom": "Éric Zemmour",            "parti": "Reconquête",                 "couleur": "#1a1a1a", "emoji": "⚫" }
+    { "id": "zemmour",      "nom": "Éric Zemmour",            "parti": "Reconquête",                 "couleur": "#1a1a1a", "emoji": "⚫" },
+    { "id": "melenchon",   "nom": "Jean-Luc Mélenchon",     "parti": "La France Insoumise",        "couleur": "#cc2529", "emoji": "🔴" }
   ],
 
   "quiz": [
@@ -29,11 +30,12 @@
       "theme": "Retraites",
       "emoji": "👴",
       "texte": "Revenir à la retraite à 60 ans pour tous",
+      "detail": "La réforme Macron de 2023 a porté l'âge légal de 62 à 64 ans. Avant 1993 (Balladur), l'âge minimal était 60 ans sous Mitterrand. Partir à 60 ans exigerait en plus 40 à 43 annuités de cotisation selon les candidats. Le coût est estimé à 15–25 milliards d'euros par an supplémentaires selon la DREES.",
       "positions": {
         "arthaud": 1, "asselineau": 0, "attal": -1, "batho": 1, "bertrand": -1,
         "branco": 0, "cazeneuve": 1, "devillepin": 1, "dupont-aignan": 0, "faure": 0,
         "kazib": 1, "le-pen": -1, "philippe": -1, "philippot": 1, "retailleau": -1,
-        "ruffin": 1, "roussel": 1, "tondelier": 0, "zemmour": -1
+        "ruffin": 1, "roussel": 1, "tondelier": 0, "zemmour": -1, "melenchon": 1
       }
     },
     {
@@ -41,11 +43,12 @@
       "theme": "Immigration",
       "emoji": "🌍",
       "texte": "Réduire significativement l'immigration légale en France",
+      "detail": "La France a accordé environ 320 000 premiers titres de séjour en 2023. \"Réduire significativement\" signifie diviser ce chiffre par 2 à 10 selon les candidats. Les motifs principaux sont : le travail (30%), le regroupement familial (28%), les étudiants (26%), l'humanitaire (16%). L'immigration clandestine est estimée à 300 000–600 000 personnes résidant irrégulièrement.",
       "positions": {
         "arthaud": -1, "asselineau": 1, "attal": 1, "batho": -1, "bertrand": 1,
         "branco": 0, "cazeneuve": -1, "devillepin": -1, "dupont-aignan": 1, "faure": -1,
         "kazib": -1, "le-pen": 1, "philippe": 1, "philippot": 1, "retailleau": 1,
-        "ruffin": 0, "roussel": 0, "tondelier": -1, "zemmour": 1
+        "ruffin": 0, "roussel": 0, "tondelier": -1, "zemmour": 1, "melenchon": -1
       }
     },
     {
@@ -53,11 +56,12 @@
       "theme": "Fiscalité",
       "emoji": "💰",
       "texte": "Rétablir l'ISF (impôt de solidarité sur la fortune)",
+      "detail": "L'ISF a été supprimé en 2018 par Macron et remplacé par l'IFI (Impôt sur la Fortune Immobilière), limité aux biens immobiliers uniquement. L'ISF rapportait ~5 milliards/an et concernait les patrimoines > 1,3 million d'euros. L'IFI exonère actions, assurance-vie et liquidités, ce qui bénéficie principalement aux détenteurs de capital financier.",
       "positions": {
         "arthaud": 1, "asselineau": 0, "attal": -1, "batho": 1, "bertrand": -1,
         "branco": 1, "cazeneuve": 1, "devillepin": 1, "dupont-aignan": 1, "faure": 1,
         "kazib": 1, "le-pen": 0, "philippe": -1, "philippot": 1, "retailleau": -1,
-        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": -1
+        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": -1, "melenchon": 1
       }
     },
     {
@@ -65,11 +69,12 @@
       "theme": "Énergie",
       "emoji": "⚛️",
       "texte": "Maintenir le nucléaire comme pilier de la politique énergétique",
+      "detail": "La France tire ~70% de son électricité du nucléaire (56 réacteurs). De nouveaux EPR2 sont en projet (Penly, Gravelines…). Arguments pour : faibles émissions CO₂, indépendance énergétique, coût stable. Arguments contre : déchets radioactifs sur 100 000 ans (site Cigéo à Bure), risque d'accident, coût de construction des EPR (Flamanville : 13,7 Mds€ au lieu des 3,3 prévus).",
       "positions": {
         "arthaud": -1, "asselineau": 1, "attal": 1, "batho": -1, "bertrand": 1,
         "branco": 1, "cazeneuve": 0, "devillepin": 0, "dupont-aignan": 1, "faure": -1,
         "kazib": -1, "le-pen": 1, "philippe": 1, "philippot": 1, "retailleau": 1,
-        "ruffin": -1, "roussel": 1, "tondelier": -1, "zemmour": 1
+        "ruffin": -1, "roussel": 1, "tondelier": -1, "zemmour": 1, "melenchon": -1
       }
     },
     {
@@ -77,11 +82,12 @@
       "theme": "OTAN",
       "emoji": "🛡️",
       "texte": "Maintenir la France dans le commandement intégré de l'OTAN",
+      "detail": "De Gaulle avait retiré la France du commandement militaire intégré en 1966, tout en restant dans l'alliance. Sarkozy l'a réintégrée en 2009. Rester dans l'OTAN ne signifie pas automatiquement participer à toutes les guerres. Quitter le commandement intégré permettrait de refuser des ordres militaires de l'OTAN tout en maintenant les garanties de défense collective (article 5).",
       "positions": {
         "arthaud": -1, "asselineau": -1, "attal": 1, "batho": 0, "bertrand": 1,
         "branco": -1, "cazeneuve": 1, "devillepin": 0, "dupont-aignan": -1, "faure": 0,
         "kazib": -1, "le-pen": 1, "philippe": 1, "philippot": -1, "retailleau": 1,
-        "ruffin": -1, "roussel": -1, "tondelier": 0, "zemmour": 1
+        "ruffin": -1, "roussel": -1, "tondelier": 0, "zemmour": 1, "melenchon": -1
       }
     },
     {
@@ -89,11 +95,12 @@
       "theme": "Sécurité",
       "emoji": "🚔",
       "texte": "Rétablir des peines planchers obligatoires pour les récidivistes",
+      "detail": "Les peines planchers ont existé de 2007 à 2014 (loi Dati). Elles imposaient un minimum incompressible : ex. 1 an de prison pour un 2ᵉ délit, 4 ans pour un 3ᵉ crime. Abrogées sous Hollande au nom de l'individualisation des peines par le juge. Les partisans veulent dissuader la récidive ; les opposants estiment que ça surcharge les prisons et que le juge doit adapter la peine au contexte.",
       "positions": {
         "arthaud": -1, "asselineau": 1, "attal": 1, "batho": 0, "bertrand": 1,
         "branco": -1, "cazeneuve": -1, "devillepin": 0, "dupont-aignan": 1, "faure": -1,
         "kazib": -1, "le-pen": 1, "philippe": 1, "philippot": 1, "retailleau": 1,
-        "ruffin": -1, "roussel": -1, "tondelier": -1, "zemmour": 1
+        "ruffin": -1, "roussel": -1, "tondelier": -1, "zemmour": 1, "melenchon": -1
       }
     },
     {
@@ -101,11 +108,12 @@
       "theme": "Environnement",
       "emoji": "🌱",
       "texte": "Interdire progressivement les pesticides chimiques dangereux",
+      "detail": "La France est le 3ᵉ consommateur de pesticides en Europe. Le glyphosate (Roundup, Monsanto/Bayer) est classé \"probablement cancérigène\" par le CIRC (OMS) mais autorisé dans l'UE jusqu'en 2033. Le plan Écophyto visait -50% d'ici 2025 mais a échoué (usage en hausse). Une interdiction progressive affecte directement le rendement et le revenu agricole, surtout en grandes cultures (blé, maïs, betterave).",
       "positions": {
         "arthaud": 1, "asselineau": 0, "attal": -1, "batho": 1, "bertrand": -1,
         "branco": 1, "cazeneuve": 0, "devillepin": 1, "dupont-aignan": 0, "faure": 1,
         "kazib": 1, "le-pen": -1, "philippe": -1, "philippot": -1, "retailleau": -1,
-        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": -1
+        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": -1, "melenchon": 1
       }
     },
     {
@@ -113,11 +121,12 @@
       "theme": "Social",
       "emoji": "🤝",
       "texte": "Conditionner le RSA à des heures d'activité obligatoires par semaine",
+      "detail": "Le RSA (Revenu de Solidarité Active) est versé à ~1,9 million de foyers pour un montant de 635€/mois (personne seule). La loi France Travail de 2023 a déjà introduit 15h/semaine d'activité obligatoire (formations, bénévolat, ateliers…). Le débat porte sur le principe : aide inconditionnelle (droit) vs contrat d'engagement réciproque. Les opposants soulignent que 40% des bénéficiaires travaillent déjà.",
       "positions": {
         "arthaud": -1, "asselineau": 0, "attal": 1, "batho": -1, "bertrand": 1,
         "branco": -1, "cazeneuve": -1, "devillepin": -1, "dupont-aignan": 1, "faure": -1,
         "kazib": -1, "le-pen": 1, "philippe": 1, "philippot": 0, "retailleau": 1,
-        "ruffin": -1, "roussel": -1, "tondelier": -1, "zemmour": 1
+        "ruffin": -1, "roussel": -1, "tondelier": -1, "zemmour": 1, "melenchon": -1
       }
     },
     {
@@ -125,11 +134,12 @@
       "theme": "Logement",
       "emoji": "🏠",
       "texte": "Encadrer strictement les loyers dans les grandes villes",
+      "detail": "L'encadrement des loyers est déjà en vigueur à Paris, Lille, Lyon, Bordeaux, Montpellier… Il plafonne les loyers à un \"loyer de référence\" majoré de 20%. Selon ses défenseurs, il protège les locataires contre les hausses abusives. Selon ses opposants, il décourage les propriétaires de louer (ils vendent ou font de la location saisonnière), réduisant l'offre disponible et aggravant la pénurie.",
       "positions": {
         "arthaud": 1, "asselineau": 0, "attal": -1, "batho": 1, "bertrand": -1,
         "branco": 1, "cazeneuve": 1, "devillepin": 1, "dupont-aignan": 0, "faure": 1,
         "kazib": 1, "le-pen": -1, "philippe": -1, "philippot": 0, "retailleau": -1,
-        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": -1
+        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": -1, "melenchon": 1
       }
     },
     {
@@ -137,11 +147,12 @@
       "theme": "Société",
       "emoji": "🌿",
       "texte": "Légaliser le cannabis récréatif sous contrôle de l'État",
+      "detail": "La France compte ~5 millions de consommateurs réguliers (1ᵉʳ en Europe). Le cannabis est illégal mais la simple consommation n'est punie que d'une amende forfaitaire de 200€ depuis 2020. La légalisation rapporterait 1,5–3 milliards€/an selon l'IFRI. Le Canada (2018), l'Allemagne (2024) et plusieurs États US ont légalisé. Les opposants craignent une hausse de la consommation chez les mineurs et les effets sur la santé mentale.",
       "positions": {
         "arthaud": 0, "asselineau": -1, "attal": -1, "batho": 1, "bertrand": -1,
         "branco": 1, "cazeneuve": 0, "devillepin": 0, "dupont-aignan": -1, "faure": 0,
         "kazib": 1, "le-pen": -1, "philippe": -1, "philippot": -1, "retailleau": -1,
-        "ruffin": 1, "roussel": 0, "tondelier": 1, "zemmour": -1
+        "ruffin": 1, "roussel": 0, "tondelier": 1, "zemmour": -1, "melenchon": 1
       }
     },
     {
@@ -149,11 +160,12 @@
       "theme": "Travail",
       "emoji": "💶",
       "texte": "Augmenter significativement le SMIC (vers 1600€ nets minimum)",
+      "detail": "Le SMIC est actuellement à ~1 430€ nets/mois (2026). Le porter à 1 600€ représente +12%. Environ 17% des salariés sont au SMIC. Les partisans avancent que ça booste la consommation et réduit les inégalités. Les opposants (surtout employeurs de TPE/PME) craignent des licenciements ou fermetures d'entreprises à faible marge, notamment dans la restauration, le commerce et les services à la personne.",
       "positions": {
         "arthaud": 1, "asselineau": 1, "attal": -1, "batho": 1, "bertrand": 0,
         "branco": 0, "cazeneuve": 1, "devillepin": 1, "dupont-aignan": 1, "faure": 1,
         "kazib": 1, "le-pen": 0, "philippe": -1, "philippot": 1, "retailleau": -1,
-        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": 0
+        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": 0, "melenchon": 1
       }
     },
     {
@@ -161,11 +173,12 @@
       "theme": "Services publics",
       "emoji": "🏥",
       "texte": "Embaucher massivement dans les hôpitaux et l'Éducation nationale",
+      "detail": "L'hôpital public a perdu ~100 000 lits depuis 1995 et manque d'environ 50 000 soignants selon la FHF. L'Éducation nationale manque d'enseignants dans plusieurs disciplines (maths, sciences, langues). Embaucher massivement (ex: 100 000 postes) coûterait 3–8 milliards€/an selon les estimations. La question est aussi de rendre les métiers attractifs face au secteur privé (salaires, conditions de travail).",
       "positions": {
         "arthaud": 1, "asselineau": 1, "attal": -1, "batho": 1, "bertrand": -1,
         "branco": 1, "cazeneuve": 1, "devillepin": 1, "dupont-aignan": 1, "faure": 1,
         "kazib": 1, "le-pen": -1, "philippe": -1, "philippot": 1, "retailleau": -1,
-        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": -1
+        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": -1, "melenchon": 1
       }
     },
     {
@@ -173,11 +186,12 @@
       "theme": "Démocratie",
       "emoji": "🗳️",
       "texte": "Adopter la représentation proportionnelle aux élections législatives",
+      "detail": "La France utilise le scrutin uninominal à deux tours pour les législatives : le candidat qui obtient plus de 50% des voix au 1ᵉʳ tour, ou le plus de voix au 2ᵉ, gagne. La proportionnelle attribuerait des sièges proportionnellement aux voix obtenues. Exemple : aux législatives 2022, le RN a obtenu 18% des voix mais seulement 6% des sièges. Risque évoqué : instabilité gouvernementale comme sous la IVe République.",
       "positions": {
         "arthaud": 1, "asselineau": 0, "attal": -1, "batho": 1, "bertrand": -1,
         "branco": 1, "cazeneuve": 1, "devillepin": 1, "dupont-aignan": 0, "faure": 1,
         "kazib": 1, "le-pen": 1, "philippe": -1, "philippot": 1, "retailleau": -1,
-        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": 0
+        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": 0, "melenchon": 1
       }
     },
     {
@@ -185,11 +199,12 @@
       "theme": "Europe",
       "emoji": "🇪🇺",
       "texte": "Renforcer l'intégration européenne et construire une Europe fédérale",
+      "detail": "L'UE gère déjà : la monnaie (BCE pour 20 pays), le marché unique, l'agriculture (PAC), le commerce extérieur. Une Europe fédérale irait plus loin : politique étrangère commune, armée européenne, budget fédéral significatif, harmonisation fiscale. Les souverainistes veulent au contraire rapatrier des compétences vers les États nations.",
       "positions": {
         "arthaud": -1, "asselineau": -1, "attal": 1, "batho": 1, "bertrand": 0,
         "branco": -1, "cazeneuve": 1, "devillepin": 1, "dupont-aignan": -1, "faure": 1,
         "kazib": -1, "le-pen": -1, "philippe": 1, "philippot": -1, "retailleau": -1,
-        "ruffin": -1, "roussel": -1, "tondelier": 1, "zemmour": -1
+        "ruffin": -1, "roussel": -1, "tondelier": 1, "zemmour": -1, "melenchon": -1
       }
     },
     {
@@ -197,11 +212,12 @@
       "theme": "Fin de vie",
       "emoji": "💙",
       "texte": "Autoriser l'aide à mourir (euthanasie active) pour les malades en phase terminale",
+      "detail": "La France autorise la sédation profonde et continue jusqu'au décès (loi Claeys-Leonetti 2016), mais pas l'injection létale. L'euthanasie active est légale en Belgique, Pays-Bas, Espagne, Canada, Suisse (assistance au suicide). Le débat porte sur l'autonomie du patient (droit à choisir sa mort) vs le risque de dérives vers des personnes vulnérables, et l'objection de conscience des médecins.",
       "positions": {
         "arthaud": 0, "asselineau": 0, "attal": 1, "batho": 1, "bertrand": -1,
         "branco": 1, "cazeneuve": 0, "devillepin": 0, "dupont-aignan": 0, "faure": 1,
         "kazib": 0, "le-pen": -1, "philippe": 0, "philippot": -1, "retailleau": -1,
-        "ruffin": 1, "roussel": 0, "tondelier": 1, "zemmour": -1
+        "ruffin": 1, "roussel": 0, "tondelier": 1, "zemmour": -1, "melenchon": 1
       }
     },
     {
@@ -209,11 +225,12 @@
       "theme": "Laïcité",
       "emoji": "🕌",
       "texte": "Interdire les signes religieux ostentatoires dans les services publics",
+      "detail": "Sont considérés comme \"ostentatoires\" : le voile islamique (hijab, niqab), la kippa, la grande croix chrétienne, le turban sikh. Les petits signes discrets (médaille, croix fine sous les vêtements) restent autorisés. La loi de 2004 interdit déjà ces signes dans les ÉCOLES pour les élèves. Ce débat porte sur l'extension aux AGENTS de l'État (fonctionnaires dans les mairies, tribunaux, hôpitaux…), voire aux usagers dans les bâtiments publics.",
       "positions": {
         "arthaud": 0, "asselineau": 0, "attal": 1, "batho": 0, "bertrand": 1,
         "branco": 0, "cazeneuve": 0, "devillepin": 0, "dupont-aignan": 1, "faure": 0,
         "kazib": -1, "le-pen": 1, "philippe": 0, "philippot": 1, "retailleau": 1,
-        "ruffin": 0, "roussel": 0, "tondelier": 0, "zemmour": 1
+        "ruffin": 0, "roussel": 0, "tondelier": 0, "zemmour": 1, "melenchon": -1
       }
     },
     {
@@ -221,11 +238,12 @@
       "theme": "Institutions",
       "emoji": "🏛️",
       "texte": "Passer à une VIe République avec davantage de pouvoirs au Parlement",
+      "detail": "La Ve République (de Gaulle, 1958) est présidentialiste : le Président nomme le Premier ministre, dissout l'Assemblée, peut gouverner par ordonnance et utiliser le 49.3 pour forcer un vote. La VIe République rééquilibrerait vers le Parlement. La IVe République (1946-1958) était parlementaire et connue pour son instabilité (24 gouvernements en 12 ans). L'idée inclut souvent l'élection à la proportionnelle et le RIC.",
       "positions": {
         "arthaud": 1, "asselineau": 0, "attal": -1, "batho": 1, "bertrand": -1,
         "branco": 1, "cazeneuve": 0, "devillepin": 1, "dupont-aignan": 0, "faure": 1,
         "kazib": 1, "le-pen": -1, "philippe": -1, "philippot": 1, "retailleau": -1,
-        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": -1
+        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": -1, "melenchon": 1
       }
     },
     {
@@ -233,11 +251,12 @@
       "theme": "Ukraine",
       "emoji": "🇺🇦",
       "texte": "Augmenter le soutien militaire à l'Ukraine face à la Russie",
+      "detail": "Depuis l'invasion russe de février 2022, la France a livré des canons Caesar, des missiles SCALP, des blindés AMX-10RC… Macron n'a pas exclu d'envoyer des troupes. Le débat porte sur le niveau d'engagement : armement défensif seulement ? Troupes au sol ? Financement de la reconstruction (estimée à 500 Mds€) ? Les opposants à un soutien accru craignent une escalade vers un conflit direct avec la Russie nucléaire.",
       "positions": {
         "arthaud": -1, "asselineau": -1, "attal": 1, "batho": 0, "bertrand": 1,
         "branco": -1, "cazeneuve": 1, "devillepin": 1, "dupont-aignan": -1, "faure": 1,
         "kazib": -1, "le-pen": 0, "philippe": 1, "philippot": -1, "retailleau": 1,
-        "ruffin": 1, "roussel": 0, "tondelier": 1, "zemmour": 0
+        "ruffin": 1, "roussel": 0, "tondelier": 1, "zemmour": 0, "melenchon": -1
       }
     },
     {
@@ -245,11 +264,12 @@
       "theme": "Économie",
       "emoji": "🏭",
       "texte": "Nationaliser les secteurs stratégiques (énergie, transports, autoroutes)",
+      "detail": "La France a nationalisé massivement en 1981–82 (Mitterrand : banques, acier, énergie), puis privatisé en 1986–88 et 1993+. EDF est redevenu à 100% public en 2022. Les autoroutes ont été privatisées en 2005–06 et génèrent des profits records (Vinci, Eiffage, Abertis…). Les nationaliser coûterait à l'État plusieurs dizaines de milliards d'euros de rachat. Les opposants soulèvent l'efficacité de la gestion publique et le coût pour les contribuables.",
       "positions": {
         "arthaud": 1, "asselineau": 1, "attal": -1, "batho": 0, "bertrand": -1,
         "branco": 1, "cazeneuve": 0, "devillepin": 0, "dupont-aignan": 1, "faure": 0,
         "kazib": 1, "le-pen": 1, "philippe": -1, "philippot": 1, "retailleau": -1,
-        "ruffin": 1, "roussel": 1, "tondelier": 0, "zemmour": -1
+        "ruffin": 1, "roussel": 1, "tondelier": 0, "zemmour": -1, "melenchon": 1
       }
     },
     {
@@ -257,11 +277,12 @@
       "theme": "Démocratie directe",
       "emoji": "📋",
       "texte": "Instaurer le référendum d'initiative citoyenne (RIC) en toutes matières",
+      "detail": "Le RIC permettrait aux citoyens d'initier un référendum en collectant un nombre de signatures (ex: 700 000 selon LFI, 1 million selon d'autres). Il est né des revendications des Gilets Jaunes (2018–2019). La Suisse l'utilise depuis 1874 — les Suisses ont voté sur l'interdiction des minarets (2009) et l'initiative anti-burqa (2021). Le risque évoqué est de voir une majorité voter des lois contraires aux droits des minorités ou aux traités internationaux.",
       "positions": {
         "arthaud": 1, "asselineau": 1, "attal": -1, "batho": 1, "bertrand": -1,
         "branco": 1, "cazeneuve": 0, "devillepin": 1, "dupont-aignan": 1, "faure": 1,
         "kazib": 1, "le-pen": 1, "philippe": -1, "philippot": 1, "retailleau": -1,
-        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": 0
+        "ruffin": 1, "roussel": 1, "tondelier": 1, "zemmour": 0, "melenchon": 1
       }
     }
   ],
@@ -494,6 +515,22 @@
       { "theme": "Sécurité", "proposition": "Créer 10 000 places de prison supplémentaires et abaisser la majorité pénale à 16 ans" },
       { "theme": "Laïcité", "proposition": "Interdire les signes religieux ostensibles dans l'espace public" },
       { "theme": "Immigration", "proposition": "Supprimer l'AME et conditionner les aides sociales à 10 ans de résidence légale" }
+    ],
+    "melenchon": [
+      { "theme": "Retraites", "proposition": "Retraite à 60 ans pour tous, financée par la cotisation patronale" },
+      { "theme": "Immigration", "proposition": "Régularisation des sans-papiers, droit à la mobilité, refus de la criminalisation" },
+      { "theme": "Fiscalité", "proposition": "Rétablir l'ISF et créer un impôt mondial sur les milliardaires" },
+      { "theme": "Énergie", "proposition": "Sortie du nucléaire d'ici 2045, 100% d'énergies renouvelables" },
+      { "theme": "Europe", "proposition": "Désobéissance aux traités européens, plan B de rupture si pas de renégociation" },
+      { "theme": "Justice", "proposition": "Supprimer les peines planchers, réinvestir dans la justice et l'éducation" },
+      { "theme": "Environnement", "proposition": "Règle verte : ne pas prélever plus de ressources que la Terre peut renouveler" },
+      { "theme": "Social", "proposition": "RSA automatique sans conditions de recherche d'emploi, revenu universel étudiant" },
+      { "theme": "Logement", "proposition": "Encadrement strict des loyers dans les zones tendues, construction de 200 000 logements sociaux par an" },
+      { "theme": "Économie", "proposition": "Nationaliser TotalEnergies, les autoroutes et relever le SMIC à 1 600 € net" },
+      { "theme": "Institutions", "proposition": "VIe République par Assemblée Constituante élue au suffrage universel" },
+      { "theme": "Défense", "proposition": "Quitter le commandement intégré de l'OTAN, refus d'escalade en Ukraine" },
+      { "theme": "Démocratie", "proposition": "Référendum d'initiative citoyenne en toutes matières (RIC) avec 700 000 signatures" },
+      { "theme": "Laïcité", "proposition": "S'oppose à l'extension de l'interdiction des signes religieux aux agents et usagers des services publics" }
     ]
   }
 }
