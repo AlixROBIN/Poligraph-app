@@ -2393,7 +2393,7 @@ Quand `analyze_political_figure` retourne des données de presse :
 - Indique clairement si une donnée est absente
 - Sois précis et concis — pas de rembourrage"""
 
-_GROQ_MODEL   = os.getenv("GROQ_MODEL",   "llama-3.1-8b-instant")
+_GROQ_MODEL   = os.getenv("GROQ_MODEL",   "llama-3.3-70b-versatile")
 _OLLAMA_URL   = os.getenv("OLLAMA_URL",   "http://localhost:11434")
 _OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 _CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-4-8")
@@ -2584,7 +2584,7 @@ def _llm_complete(messages: list, tools: list) -> dict:
         messages=messages,
         tools=tools,
         tool_choice="auto",
-        max_tokens=2048,
+        max_tokens=1024,
         temperature=0.3,
     )
     choice = response.choices[0]
@@ -2616,7 +2616,7 @@ def chat_endpoint(req: ChatRequest, request: Request):
     t0      = _time.monotonic()
     backend = os.getenv("LLM_BACKEND", "ollama").lower()
     messages = [{"role": "system", "content": _AGENT_SYSTEM}]
-    messages += [m for m in req.history if m.get("role") in ("user", "assistant", "tool")]
+    messages += [m for m in req.history if m.get("role") in ("user", "assistant", "tool")][-12:]
     messages.append({"role": "user", "content": req.message})
     steps        = []
     tools_called = []
@@ -2674,7 +2674,7 @@ async def chat_stream_endpoint(req: ChatRequest, request: Request):
         t0      = _time.monotonic()
         backend = os.getenv("LLM_BACKEND", "ollama").lower()
         messages = [{"role": "system", "content": _AGENT_SYSTEM}]
-        messages += [m for m in req.history if m.get("role") in ("user", "assistant", "tool")]
+        messages += [m for m in req.history if m.get("role") in ("user", "assistant", "tool")][-12:]
         messages.append({"role": "user", "content": req.message})
         steps        = []
         tools_called = []
