@@ -3136,6 +3136,69 @@ def chat_metrics_reset():
     return {"message": "Métriques réinitialisées."}
 
 
+# ── Fact-check : résumé contextuel via LLM ───────────────────────────────────
+
+class FactCheckSummaryRequest(BaseModel):
+    claimText:     str
+    verdictRating: str = ""
+    claimant:      str = ""
+    source:        str = ""
+    publishedAt:   str = ""
+    politicians:   list = []
+
+
+_VERDICT_FR = {
+    "TRUE":          "Vrai",
+    "MOSTLY_TRUE":   "Plutôt vrai",
+    "HALF_TRUE":     "Mi-vrai / Partiellement vrai",
+    "MISLEADING":    "Trompeur / Hors contexte",
+    "FALSE":         "Faux",
+    "MOSTLY_FALSE":  "Plutôt faux",
+    "UNVERIFIABLE":  "Invérifiable",
+}
+
+
+@app.post("/api/factcheck/summarize")
+def factcheck_summarize(req: FactCheckSummaryRequest):
+    """
+    Génère un résumé contextuel enrichi d'un fact-check via LLM (Groq/Claude).
+    Explique qui a dit quoi, dans quel contexte probable, pourquoi c'est faux/vrai,
+    et ce que la réalité montre à la place.
+    """
+    verdict_fr = _VERDICT_FR.get(req.verdictRating, req.verdictRating or "Non classifié")
+    pols_str   = ", ".join(str(p) for p in req.politicians) if req.politicians else req.claimant or "inconnu"
+    date_str   = (req.publishedAt or "")[:10] or "date inconnue"
+
+    prompt = (
+        f"Tu es un analyste politique français expert en fact-checking. "
+        f"Analyse cette déclaration vérifiée et rédige un résumé structuré en 4-6 phrases.\n\n"
+        f"DÉCLARATION : « {req.claimText[:500]} »\n"
+        f"VERDICT : {verdict_fr}\n"
+        f"DÉCLARANT : {pols_str}\n"
+        f"SOURCE : {req.source or 'inconnue'} ({date_str})\n\n"
+        f"Réponds avec ces 4 points, chacun en 1-2 phrases :\n"
+        f"1. **Contexte** : Quand et dans quelle situation cette déclaration a probablement été faite "
+        f"(ex: débat télévisé, meeting, interview, tweet…)\n"
+        f"2. **Pourquoi le verdict est « {verdict_fr} »** : Quelle est l'erreur factuelle ou le manque de contexte\n"
+        f"3. **Ce que les données montrent** : Les chiffres ou faits réels qui contredisent (ou confirment) la déclaration\n"
+        f"4. **Nuance** : S'il y a une part de vérité ou un contexte qui explique la déclaration\n\n"
+        f"Sois factuel, précis, sans jugement politique. Réponds uniquement en français."
+    )
+
+    try:
+        result = _llm_complete(
+            [{"role": "user", "content": prompt}],
+            tools=[],
+        )
+        content = result.get("content") or ""
+        if not content:
+            return {"summary": "Impossible de générer un résumé pour ce fact-check.", "error": True}
+        return {"summary": content, "error": False}
+    except Exception as exc:
+        logger.warning(f"[Summarize] Erreur LLM : {exc}")
+        return {"summary": f"Erreur lors de la génération : {exc}", "error": True}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)

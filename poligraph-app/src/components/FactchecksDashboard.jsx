@@ -36,10 +36,47 @@ function verdictCfg(rating) {
 
 // ── Modal détail d'un fact-check ──────────────────────────────────────────────
 function FactCheckModal({ fc, onClose }) {
+  const [summary,        setSummary]        = useState(null);
+  const [loadingSummary, setLoadingSummary] = useState(false);
+
   if (!fc) return null;
   const cfg  = verdictCfg(fc.verdictRating);
   const pols = (fc.politicians || []).map(p => p?.fullName).filter(Boolean);
   const date = fc.publishedAt ? new Date(fc.publishedAt).toLocaleDateString("fr-FR") : "";
+
+  const analyze = () => {
+    setLoadingSummary(true);
+    fetch(`${BASE}/factcheck/summarize`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        claimText:     fc.claimText     || "",
+        verdictRating: fc.verdictRating || "",
+        claimant:      fc.claimant      || "",
+        source:        fc.source        || "",
+        publishedAt:   fc.publishedAt   || "",
+        politicians:   pols,
+      }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setSummary(d?.summary || "Impossible de générer un résumé."))
+      .catch(() => setSummary("Erreur réseau lors de la génération."))
+      .finally(() => setLoadingSummary(false));
+  };
+
+  // Formatter le résumé markdown simple (gras)
+  const renderSummary = (text) =>
+    text.split(/\n/).map((line, i) => {
+      const parts = line.split(/\*\*(.*?)\*\*/g);
+      return (
+        <p key={i} style={{ margin: "4px 0", fontSize: 13, lineHeight: 1.65, color: "#333" }}>
+          {parts.map((part, j) => j % 2 === 1
+            ? <strong key={j} style={{ color: "#1a2e5a" }}>{part}</strong>
+            : part
+          )}
+        </p>
+      );
+    });
 
   return (
     <div
@@ -54,8 +91,8 @@ function FactCheckModal({ fc, onClose }) {
         onClick={e => e.stopPropagation()}
         style={{
           background: "#fff", borderRadius: 16, padding: "2rem",
-          maxWidth: 640, width: "100%", boxShadow: "0 8px 40px rgba(0,0,0,0.2)",
-          position: "relative", maxHeight: "85vh", overflowY: "auto",
+          maxWidth: 680, width: "100%", boxShadow: "0 8px 40px rgba(0,0,0,0.2)",
+          position: "relative", maxHeight: "90vh", overflowY: "auto",
         }}
       >
         <button
@@ -66,11 +103,11 @@ function FactCheckModal({ fc, onClose }) {
           }}
         >✕</button>
 
-        {/* Verdict */}
+        {/* Verdict + source */}
         <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: "1.2rem", flexWrap: "wrap" }}>
           <span style={{
             background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}55`,
-            borderRadius: 12, padding: "4px 14px", fontSize: 13, fontWeight: 800,
+            borderRadius: 12, padding: "4px 14px", fontSize: 14, fontWeight: 800,
           }}>
             {cfg.label}
           </span>
@@ -78,36 +115,84 @@ function FactCheckModal({ fc, onClose }) {
           <span style={{ fontSize: 12, color: "#aaa", marginLeft: "auto" }}>{date}</span>
         </div>
 
-        {/* Déclaration */}
-        <p style={{
-          fontSize: 15, fontWeight: 700, color: "#1a2e5a", lineHeight: 1.6,
-          margin: "0 0 1rem", borderLeft: `4px solid ${cfg.color}`,
-          paddingLeft: 14,
+        {/* Déclaration — mise en valeur */}
+        <blockquote style={{
+          fontSize: 16, fontWeight: 700, color: "#1a2e5a", lineHeight: 1.65,
+          margin: "0 0 1.2rem", borderLeft: `5px solid ${cfg.color}`,
+          paddingLeft: 16, background: cfg.bg + "55", borderRadius: "0 10px 10px 0",
+          padding: "12px 12px 12px 16px",
         }}>
           « {fc.claimText || "Déclaration non renseignée"} »
-        </p>
+        </blockquote>
 
-        {/* Qui a dit ça */}
-        {fc.claimant && (
-          <p style={{ fontSize: 13, color: "#555", margin: "0 0 6px" }}>
-            <strong>Déclarant :</strong> {fc.claimant}
-          </p>
-        )}
-        {pols.length > 0 && (
-          <p style={{ fontSize: 13, color: "#555", margin: "0 0 1rem" }}>
-            <strong>Politicien(s) impliqué(s) :</strong>{" "}
-            {pols.join(", ")}
-          </p>
-        )}
+        {/* Qui a dit quoi */}
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: "1rem", fontSize: 13 }}>
+          {fc.claimant && (
+            <div style={{ background: "#f0f4ff", borderRadius: 8, padding: "8px 12px", flex: 1 }}>
+              <div style={{ fontSize: 11, color: "#aaa", marginBottom: 2 }}>Déclaré par</div>
+              <div style={{ fontWeight: 700, color: "#1a2e5a" }}>{fc.claimant}</div>
+            </div>
+          )}
+          {pols.length > 0 && pols.join(", ") !== fc.claimant && (
+            <div style={{ background: "#f8f0ff", borderRadius: 8, padding: "8px 12px", flex: 1 }}>
+              <div style={{ fontSize: 11, color: "#aaa", marginBottom: 2 }}>Politicien(s) impliqué(s)</div>
+              <div style={{ fontWeight: 600, color: "#8e44ad" }}>{pols.join(", ")}</div>
+            </div>
+          )}
+        </div>
 
-        {/* Explication fournie par le média */}
+        {/* Titre de l'article si disponible */}
         {fc.articleTitle && (
           <div style={{
-            background: "#f8f9fc", borderRadius: 10, padding: "12px 14px",
-            marginBottom: "1rem", fontSize: 13, color: "#444", lineHeight: 1.6,
+            background: "#f8f9fc", borderRadius: 10, padding: "10px 14px",
+            marginBottom: "1rem", fontSize: 13, color: "#555", lineHeight: 1.55,
+            borderLeft: "3px solid #d0d8f0",
           }}>
-            <strong style={{ color: "#1a2e5a" }}>Titre de l'article :</strong>
-            <p style={{ margin: "4px 0 0" }}>{fc.articleTitle}</p>
+            <span style={{ fontSize: 11, color: "#aaa", display: "block", marginBottom: 3 }}>Article :</span>
+            {fc.articleTitle}
+          </div>
+        )}
+
+        {/* Section analyse IA */}
+        {!summary && (
+          <button
+            onClick={analyze}
+            disabled={loadingSummary}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              width: "100%", padding: "12px 16px", borderRadius: 10,
+              border: "2px dashed #d0d8f0", background: "#fafbfe",
+              cursor: loadingSummary ? "wait" : "pointer", fontSize: 13,
+              color: "#1a3a6e", fontWeight: 600, marginBottom: "1rem",
+              transition: "border-color 0.2s",
+            }}
+            onMouseEnter={e => !loadingSummary && (e.currentTarget.style.borderColor = "#1a3a6e")}
+            onMouseLeave={e => e.currentTarget.style.borderColor = "#d0d8f0"}
+          >
+            <span style={{ fontSize: 18 }}>{loadingSummary ? "⏳" : "🤖"}</span>
+            {loadingSummary
+              ? "Analyse en cours (Groq + CamemBERT)…"
+              : "Analyser avec PoliBot — contexte, preuves, explication complète"
+            }
+          </button>
+        )}
+
+        {summary && (
+          <div style={{
+            background: "linear-gradient(135deg, #f0f4ff, #f8f0ff)",
+            borderRadius: 12, padding: "1rem 1.2rem", marginBottom: "1rem",
+            border: "1px solid #d0d8f0",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#1a3a6e" }}>🤖 Analyse PoliBot</span>
+              <button
+                onClick={() => { setSummary(null); }}
+                style={{ border: "none", background: "none", fontSize: 11, color: "#aaa", cursor: "pointer" }}
+              >
+                Réinitialiser
+              </button>
+            </div>
+            {renderSummary(summary)}
           </div>
         )}
 
@@ -118,13 +203,13 @@ function FactCheckModal({ fc, onClose }) {
             target="_blank"
             rel="noreferrer"
             style={{
-              display: "inline-block", marginTop: 8,
+              display: "inline-block",
               padding: "9px 22px", borderRadius: 8,
               background: "#1a3a6e", color: "#fff",
               textDecoration: "none", fontWeight: 700, fontSize: 13,
             }}
           >
-            Lire l'analyse complète → {fc.source}
+            Lire l'article complet → {fc.source}
           </a>
         )}
       </div>
