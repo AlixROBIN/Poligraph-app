@@ -380,6 +380,46 @@ def health():
     return {"status": "ok", "rows": int(len(df)) if df is not None else 0}
 
 
+@app.get("/api/chat/debug")
+def chat_debug():
+    """Diagnostic du chatbot — vérifie les variables d'env et l'accès aux APIs."""
+    backend = os.getenv("LLM_BACKEND", "ollama").lower()
+    groq_key = os.getenv("GROQ_API_KEY", "")
+    hf_key   = os.getenv("HF_API_KEY", "")
+    ant_key  = os.getenv("ANTHROPIC_API_KEY", "")
+
+    result = {
+        "backend":       backend,
+        "groq_key_set":  bool(groq_key),
+        "groq_key_hint": groq_key[:8] + "…" if groq_key else "MANQUANTE",
+        "hf_key_set":    bool(hf_key),
+        "hf_key_hint":   hf_key[:8] + "…" if hf_key else "MANQUANTE",
+        "anthropic_key_set": bool(ant_key),
+        "groq_model":    os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        "hf_qa_model":   os.getenv("HF_QA_MODEL", "cmarkea/distilcamembert-base-qa"),
+        "hf_embed_model":os.getenv("HF_EMBED_MODEL", "ibm-granite/granite-embedding-311m-multilingual-r2"),
+        "rag_ready":     _rag_vectorizer is not None,
+        "rag_docs":      len(_rag_docs),
+    }
+
+    # Test rapide Groq (1 token)
+    if backend == "groq" and groq_key:
+        try:
+            client = _get_groq()
+            r = client.chat.completions.create(
+                model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+                messages=[{"role": "user", "content": "Réponds juste 'ok'"}],
+                max_tokens=5, temperature=0.0,
+            )
+            result["groq_test"] = "OK — " + (r.choices[0].message.content or "").strip()
+        except Exception as e:
+            result["groq_test"] = f"ERREUR : {str(e)[:200]}"
+    else:
+        result["groq_test"] = "non testé (backend != groq ou clé manquante)"
+
+    return result
+
+
 @app.get("/api/metrics/sources")
 def metrics_sources():
     """Métriques de réussite du scraping par source + état Kafka."""
@@ -2860,16 +2900,18 @@ def _llm_complete(messages: list, tools: list) -> dict:
     backend = os.getenv("LLM_BACKEND", "ollama").lower()
 
     if backend == "ollama":
-        url  = _OLLAMA_URL.rstrip("/") + "/v1/chat/completions"
-        resp = http_requests.post(url, json={
+        url      = _OLLAMA_URL.rstrip("/") + "/v1/chat/completions"
+        ol_body: dict = {
             "model":       _OLLAMA_MODEL,
             "messages":    messages,
-            "tools":       tools,
-            "tool_choice": "auto",
             "max_tokens":  2048,
             "temperature": 0.3,
             "stream":      False,
-        }, timeout=120)
+        }
+        if tools:
+            ol_body["tools"]       = tools
+            ol_body["tool_choice"] = "auto"
+        resp = http_requests.post(url, json=ol_body, timeout=120)
         if resp.status_code != 200:
             raise HTTPException(502, f"Ollama {resp.status_code}: {resp.text[:200]}")
         data   = resp.json()
@@ -2913,15 +2955,17 @@ def _llm_complete(messages: list, tools: list) -> dict:
         return {"finish_reason": finish, "content": content, "tool_calls": tool_calls}
 
     # Groq
-    client   = _get_groq()
-    response = client.chat.completions.create(
-        model=_GROQ_MODEL,
-        messages=messages,
-        tools=tools,
-        tool_choice="auto",
-        max_tokens=1024,
-        temperature=0.0,
-    )
+    client = _get_groq()
+    groq_kwargs: dict = {
+        "model":       _GROQ_MODEL,
+        "messages":    messages,
+        "max_tokens":  1024,
+        "temperature": 0.0,
+    }
+    if tools:  # Groq refuse tools=[] avec tool_choice="auto"
+        groq_kwargs["tools"]       = tools
+        groq_kwargs["tool_choice"] = "auto"
+    response = client.chat.completions.create(**groq_kwargs)
     choice = response.choices[0]
     msg    = choice.message
     return {
