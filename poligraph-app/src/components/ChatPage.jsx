@@ -119,12 +119,48 @@ export default function ChatWidget() {
     if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading, liveSteps, open]);
 
+  // Résume les résultats d'un appel d'outil en quelques lignes lisibles,
+  // pour que le prochain tour de conversation "se souvienne" des sources
+  // déjà consultées (articles de presse, fact-checks, scandales) sans
+  // devoir tout redemander au modèle.
+  const summarizeStep = (step) => {
+    const r = step.résultat || {};
+    const lines = [];
+    const pushArticles = (articles) => {
+      (articles || []).slice(0, 5).forEach((a) => {
+        const titre = (a.titre || "").slice(0, 70);
+        if (titre) lines.push(`  • [presse] ${a.source || "?"} — « ${titre} »`);
+      });
+    };
+    if (step.outil === "get_recent_articles") {
+      pushArticles(r.articles);
+    } else if (step.outil === "analyze_political_figure") {
+      pushArticles(r.presse?.articles);
+      (r.scandales?.affaires || r.scandales?.résultats || []).slice(0, 5).forEach((s) => {
+        if (s.title) lines.push(`  • [scandale] ${s.party_short || "?"} — « ${s.title.slice(0, 70)} »`);
+      });
+    } else if (step.outil === "search_scandales") {
+      (r.résultats || []).slice(0, 5).forEach((s) => {
+        if (s.title) lines.push(`  • [scandale] ${s.party_short || "?"} — « ${s.title.slice(0, 70)} »`);
+      });
+    } else if (step.outil === "search_factchecks" || step.outil === "explain_factcheck") {
+      (r.résultats || []).slice(0, 5).forEach((f) => {
+        if (f.déclaration) lines.push(`  • [fact-check] ${f.source || "?"} (${f.verdict || "?"}) — « ${f.déclaration.slice(0, 70)} »`);
+      });
+    }
+    return lines;
+  };
+
   const buildHistory = (msgs) =>
-    msgs.flatMap((m) =>
-      m.role === "user"
-        ? [{ role: "user",      content: m.content }]
-        : [{ role: "assistant", content: m.content }]
-    );
+    msgs.flatMap((m) => {
+      if (m.role === "user") return [{ role: "user", content: m.content }];
+      let content = m.content;
+      const sourceLines = (m.steps || []).flatMap(summarizeStep);
+      if (sourceLines.length > 0) {
+        content += `\n\n[Sources déjà consultées lors de ce tour :\n${sourceLines.join("\n")}]`;
+      }
+      return [{ role: "assistant", content }];
+    });
 
   const send = async (text) => {
     const userText = (text ?? input).trim();
