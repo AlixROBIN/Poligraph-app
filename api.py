@@ -2011,15 +2011,11 @@ AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "search_scandales",
-            "description": (
-                "Cherche des scandales politiques dans la base (258 affaires). "
-                "Utilise parti= avec le code exact (RN/LR/LFI/RE/PS). "
-                "NE combine JAMAIS parti= et q= avec la même valeur."
-            ),
+            "description": "Cherche des scandales politiques (258 affaires). parti= = code exact. Jamais parti= et q= ensemble.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "q":        {"type": "string", "description": "Texte libre dans titre/description/nom du politicien"},
+                    "q":        {"type": "string", "description": "Texte libre (titre/description/politicien)"},
                     "category": {
                         "type": "string",
                         "enum": ["DETOURNEMENT_FONDS_PUBLICS", "DIFFAMATION", "INCITATION_HAINE",
@@ -2027,12 +2023,10 @@ AGENT_TOOLS = [
                                  "HARCELEMENT_MORAL", "INJURE", "FINANCEMENT_ILLEGAL_CAMPAGNE",
                                  "FAVORITISME", "ABUS_CONFIANCE", "AGRESSION_SEXUELLE",
                                  "CORRUPTION", "ABUS_BIENS_SOCIAUX", "FRAUDE_FISCALE", "AUTRE"],
-                        "description": "Catégorie exacte de l'affaire",
                     },
                     "parti": {
                         "type": "string",
                         "enum": ["RN", "LR", "LFI", "RE", "PS", "EELV", "HOR", "MoDem", "NFP", "FN", "NI", "REC"],
-                        "description": "Code du parti — utilise le code exact",
                     },
                     "statut": {
                         "type": "string",
@@ -2040,11 +2034,10 @@ AGENT_TOOLS = [
                                  "CLASSEMENT_SANS_SUITE", "APPEL_EN_COURS", "RELAXE",
                                  "CONDAMNATION_PREMIERE_INSTANCE", "INSTRUCTION",
                                  "RENVOI_TRIBUNAL", "NON_LIEU", "MISE_EN_EXAMEN", "PROCES_EN_COURS"],
-                        "description": "Statut judiciaire exact",
                     },
-                    "annee_min": {"type": "string", "description": "Année minimale des faits (ex: '2015')"},
-                    "annee_max": {"type": "string", "description": "Année maximale des faits (ex: '2024')"},
-                    "limit":     {"type": "string", "description": "Nombre de résultats (max 8, fixe — chaque résultat inclut une description, le budget de tokens Groq est serré)"},
+                    "annee_min": {"type": "string", "description": "Année min (ex: '2015')"},
+                    "annee_max": {"type": "string", "description": "Année max (ex: '2024')"},
+                    "limit":     {"type": "string", "description": "Plafonné à 8 côté serveur, inutile de demander plus"},
                 },
                 "required": [],
             },
@@ -2054,14 +2047,14 @@ AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "search_votes",
-            "description": "Cherche parmi 9 871 votes parlementaires (2017-2026). Utilise q= pour chercher dans le titre.",
+            "description": "Cherche parmi 9871 votes parlementaires (2017-2026). q= = mots-clés du titre.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "q":      {"type": "string",  "description": "Mots-clés dans le titre du vote/loi"},
-                    "result": {"type": "string",  "enum": ["ADOPTED", "REJECTED"], "description": "Résultat du vote"},
+                    "result": {"type": "string",  "enum": ["ADOPTED", "REJECTED"]},
                     "annee":  {"type": "string", "description": "Année du vote (ex: '2022')"},
-                    "limit":  {"type": "string", "description": "Nombre de résultats (défaut 10, max 30)"},
+                    "limit":  {"type": "string", "description": "défaut 10, max 30"},
                 },
                 "required": [],
             },
@@ -2071,22 +2064,12 @@ AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_statistics",
-            "description": (
-                "Statistiques agrégées. Pour 'scandales' : retourne les comptages par catégorie, parti, statut. "
-                "Avec parti= : retourne la répartition par catégorie POUR ce parti spécifiquement."
-            ),
+            "description": "Comptages agrégés (catégorie/parti/statut). Avec parti= : répartition pour CE parti. Préférer à search_scandales pour comparer des partis.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "type": {
-                        "type": "string",
-                        "enum": ["scandales", "votes", "partis", "elus"],
-                        "description": "Type de statistiques",
-                    },
-                    "parti": {
-                        "type": "string",
-                        "description": "Filtrer les stats scandales pour un parti spécifique (ex: RN, LR)",
-                    },
+                    "type":  {"type": "string", "enum": ["scandales", "votes", "partis", "elus"]},
+                    "parti": {"type": "string", "description": "Filtrer scandales par parti (ex: RN)"},
                 },
                 "required": ["type"],
             },
@@ -2101,7 +2084,7 @@ AGENT_TOOLS = [
                 "type": "object",
                 "properties": {
                     "q":     {"type": "string",  "description": "Mots-clés dans le titre ou résumé"},
-                    "limit": {"type": "string", "description": "Nombre d'articles (défaut 8, max 20)"},
+                    "limit": {"type": "string", "description": "défaut 8, max 20"},
                 },
                 "required": [],
             },
@@ -2111,12 +2094,12 @@ AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_politician_profile",
-            "description": "Obtenir le profil détaillé d'un élu français (parti, institution, position politique, âge).",
+            "description": "Profil détaillé d'un élu français (parti, institution, position, âge).",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "name":  {"type": "string", "description": "Nom du politicien (prénom et/ou nom)"},
-                    "parti": {"type": "string", "description": "Parti pour affiner si plusieurs homonymes"},
+                    "name":  {"type": "string", "description": "Nom du politicien"},
+                    "parti": {"type": "string", "description": "Pour affiner si homonymes"},
                 },
                 "required": ["name"],
             },
@@ -2126,17 +2109,12 @@ AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "analyze_political_figure",
-            "description": (
-                "Analyse croisée complète d'un personnage politique : "
-                "articles de presse récents (avec sentiment et mots-clés) + affaires dans la base de données + profil élu. "
-                "C'est l'outil principal pour répondre à des questions sur une personnalité politique spécifique, "
-                "analyser sa situation médiatique, spéculer sur son avenir politique ou comparer presse et réalité judiciaire."
-            ),
+            "description": "Analyse croisée d'un politicien : presse récente (sentiment, mots-clés) + affaires DB + profil élu. Outil principal pour toute question sur une personnalité politique donnée.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "name":  {"type": "string", "description": "Nom complet ou partiel du politicien (ex: 'Marine Le Pen', 'Macron', 'Mélenchon')"},
-                    "parti": {"type": "string", "description": "Parti politique pour affiner (optionnel, ex: RN, LFI, LREM)"},
+                    "name":  {"type": "string", "description": "Nom du politicien (ex: 'Marine Le Pen')"},
+                    "parti": {"type": "string", "description": "Optionnel, pour affiner"},
                 },
                 "required": ["name"],
             },
@@ -2146,18 +2124,13 @@ AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "semantic_search",
-            "description": (
-                "Recherche sémantique dans la base locale (258 scandales + 817 fact-checks). "
-                "Trouve des documents proches même sans mots-clés exacts. "
-                "À utiliser quand la recherche exacte (search_scandales, search_factchecks) ne donne pas de résultats, "
-                "ou pour des requêtes conceptuelles ('affaires similaires à', 'déclarations sur le même thème')."
-            ),
+            "description": "Recherche sémantique (258 scandales + 817 fact-checks), par similarité — à utiliser si search_scandales/search_factchecks ne donnent rien.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query":  {"type": "string", "description": "Description en langage naturel de ce que vous cherchez"},
-                    "source": {"type": "string", "enum": ["all", "scandale", "factcheck"], "description": "Type de document (défaut: all)"},
-                    "limit":  {"type": "string", "description": "Nombre de résultats (défaut 8, max 15)"},
+                    "query":  {"type": "string", "description": "Requête en langage naturel"},
+                    "source": {"type": "string", "enum": ["all", "scandale", "factcheck"]},
+                    "limit":  {"type": "string", "description": "défaut 8, max 15"},
                 },
                 "required": ["query"],
             },
@@ -2167,23 +2140,18 @@ AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "search_factchecks",
-            "description": (
-                "Cherche parmi les fact-checks de politiciens français (AFP Factuel, TF1 Info, Franceinfo, Le Monde…). "
-                "Retourne les déclarations avec leur verdict (TRUE/FALSE/MISLEADING). "
-                "Utiliser pour lister des fact-checks sur un politicien ou un thème."
-            ),
+            "description": "Fact-checks de politiciens français (AFP Factuel, TF1 Info, Franceinfo, Le Monde…), avec verdict (TRUE/FALSE/MISLEADING).",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "q":       {"type": "string", "description": "Mots-clés dans la déclaration vérifiée ou le nom du politicien"},
+                    "q":       {"type": "string", "description": "Mots-clés (déclaration ou politicien)"},
                     "verdict": {
                         "type": "string",
                         "enum": ["TRUE", "MOSTLY_TRUE", "HALF_TRUE", "MISLEADING",
                                  "FALSE", "MOSTLY_FALSE", "UNVERIFIABLE"],
-                        "description": "Filtrer par verdict exact",
                     },
-                    "source":  {"type": "string", "description": "Source du fact-check (ex: 'AFP Factuel', 'Le Monde')"},
-                    "limit":   {"type": "string", "description": "Nombre de résultats (défaut 10, max 30)"},
+                    "source":  {"type": "string", "description": "Ex: 'AFP Factuel', 'Le Monde'"},
+                    "limit":   {"type": "string", "description": "défaut 10, max 30"},
                 },
                 "required": [],
             },
@@ -2193,18 +2161,13 @@ AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "explain_factcheck",
-            "description": (
-                "Répond à une question précise sur un fait vérifié grâce à un modèle NLP extractif français (CamemBERT QA). "
-                "Cherche les fact-checks pertinents et extrait la PHRASE EXACTE du corpus qui répond à la question. "
-                "À utiliser quand l'utilisateur demande POURQUOI un propos est faux/vrai, "
-                "ou veut une explication précise sur une déclaration vérifiée d'un politicien."
-            ),
+            "description": "Extrait (CamemBERT QA) la phrase exacte du corpus qui répond à une question précise sur un fait vérifié — pour un 'pourquoi'.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "question":   {"type": "string",  "description": "La question précise (ex: 'Pourquoi cette déclaration est-elle fausse ?', 'Quelle preuve montre que X a menti sur Y ?')"},
-                    "politician": {"type": "string",  "description": "Nom du politicien pour filtrer (optionnel, ex: 'Bardella', 'Le Pen')"},
-                    "limit":      {"type": "string", "description": "Nombre de fact-checks à analyser (défaut 5, max 10)"},
+                    "question":   {"type": "string",  "description": "Ex: 'Pourquoi cette déclaration est-elle fausse ?'"},
+                    "politician": {"type": "string",  "description": "Optionnel, pour filtrer"},
+                    "limit":      {"type": "string", "description": "défaut 5, max 10"},
                 },
                 "required": ["question"],
             },
@@ -2635,108 +2598,37 @@ def _execute_agent_tool(tool_name: str, tool_input: dict) -> dict:
         return {"erreur": f"Paramètres invalides pour {tool_name} : {e}"}
 
 
-_AGENT_SYSTEM = """Tu es PoliBot, un assistant d'analyse de la vie politique française. Tu réponds UNIQUEMENT à des questions sur la politique française.
+_AGENT_SYSTEM = """Tu es PoliBot, assistant d'analyse de la vie politique française. Tu réponds UNIQUEMENT à des questions sur : élus/politiciens français, votes Assemblée/Sénat, scandales et affaires judiciaires impliquant des politiques français, partis français, actualité politique française, fact-checks de politiciens français.
 
-## ⛔ PÉRIMÈTRE STRICT
-Tu n'es autorisé à traiter QUE les sujets suivants :
-- Élus et personnalités politiques françaises (ex: Rima Hassan, Marine Le Pen, Macron, Bardella, Mélenchon…)
-- Votes et lois à l'Assemblée nationale / Sénat
-- Scandales, affaires judiciaires, accusations impliquant des politiques français
-- Partis politiques français (LFI, RN, RE, PS, LR…)
-- Actualité politique française récente (presse)
-- Fact-checks de déclarations de politiciens français (vrai/faux/trompeur)
-- Affaires médiatiques impliquant un élu français (apologie, diffamation, polémique, etc.)
+Une question sur un élu français EST dans ton périmètre même si elle touche un sujet sensible (terrorisme, racisme, corruption) — la personne citée étant politicienne suffit.
+Ne refuse JAMAIS une question vague ou courte mentionnant la politique française (ex: "Actualités ?", "quoi de neuf ?") : appelle `get_recent_articles(limit=8)` d'abord, résume UNIQUEMENT les résultats réels — n'invente jamais un titre/nom/verdict.
+Refuse SEULEMENT si hors sujet politique français (recettes, sport, tech...) : "Je suis limité à l'analyse politique française. Je ne peux pas répondre à cette question."
 
-⚠️ IMPORTANT : une question sur un élu français — même si elle mentionne un sujet sensible (terrorisme, racisme, apologie, corruption) — EST dans ton périmètre si la personne citée est un politicien ou élu français.
+## Mémoire de conversation
+Utilise l'historique (12 derniers messages) pour les questions de suivi : si "il/elle/son parti/et lui ?" sans nom explicite, résous depuis le dernier politicien/parti mentionné et réutilise-le dans tes appels d'outils. Ne redemande jamais un nom déjà donné. Nouveau sujet explicite → ignore l'ancien contexte.
+Un message assistant peut contenir `[Sources déjà consultées lors de ce tour : ...]` (articles/fact-checks/scandales déjà récupérés). Pour un suivi sur CES sources ("quels journaux en parlent ?"), réponds depuis ce bloc sans le recopier littéralement. Si la source demandée n'y est pas, appelle l'outil concerné.
 
-⚠️ RÈGLE CRITIQUE : Ne refuse JAMAIS une question qui mentionne la politique, des partis, des élus, ou l'actualité française — même si elle est vague ou courte (ex: "Actualités politiques françaises ?", "quoi de neuf en politique ?", "dis-moi ce qui se passe"). Dans ce cas, appelle D'ABORD `get_recent_articles(limit=8)` (et si besoin `search_factchecks(limit=5)`) puis résume UNIQUEMENT les résultats réels retournés — n'invente jamais de titre, de nom ou de verdict.
+## Chiffres de référence
+258 scandales (RN 58, LR 39, LFI 29, RE 16, PS 11) · 9871 votes (3601 adoptés, 6270 rejetés) · 35095 élus · 817 fact-checks (AFP Factuel, TF1 Info, Franceinfo, Le Monde, Libération, 20 Minutes)
 
-Refuse UNIQUEMENT si la question ne concerne vraiment pas du tout la politique française (ex: recettes, sport mondial, tech, géographie étrangère), en répondant :
-"Je suis limité à l'analyse politique française. Je ne peux pas répondre à cette question."
+## Outils
+- Question sur un politicien → `analyze_political_figure(name=...)` EN PREMIER, toujours (nom résolu depuis l'historique si besoin).
+- Scandales d'un parti → `search_scandales(parti="RN")` (code exact, jamais `parti`+`q` ensemble).
+- Comparaison/stats entre partis (ex: "compare RN et LFI") → `get_statistics(type="scandales", parti=...)` pour CHAQUE parti, PAS `search_scandales` (bien plus léger). N'ajoute `search_scandales` que si des exemples concrets sont demandés en plus.
+- Votes sur un thème → `search_votes(q=...)`.
+- Fact-checks (vrai/faux) → `search_factchecks(q=... , verdict=...)`.
+- Pourquoi un propos est faux/vrai → `explain_factcheck(question=..., politician=...)` (extrait la phrase exacte du corpus).
+- Recherche conceptuelle sans résultats exacts → `semantic_search(query=...)`.
 
-## 🧠 Mémoire de conversation
+## Sentiment médiatique
+Utilise `tonalité_médiatique` (favorable/critique/neutre) et `mots_clés_dominants` de `analyze_political_figure`. N'expose JAMAIS de score numérique brut — traduis en langage naturel ("couverture critique", "ton neutre").
 
-Tu reçois l'historique des échanges précédents avec cet utilisateur (jusqu'à 12 derniers messages). UTILISE-LE pour comprendre les questions de suivi :
-- Si le message actuel utilise un pronom ou une référence implicite ("il", "elle", "son parti", "ses scandales", "et lui ?", "compare-le à…", "et pour ce parti ?") sans nommer explicitement la personne/le parti, résous la référence à partir du DERNIER politicien/parti/sujet mentionné dans l'historique (par toi ou par l'utilisateur) — puis utilise ce nom résolu dans tes appels d'outils (ex: `analyze_political_figure(name="<nom résolu>")`).
-- Ne redemande jamais à l'utilisateur de préciser un nom déjà donné plus haut dans la conversation.
-- Si la nouvelle question change clairement de sujet (nouveau nom de politicien, nouveau parti explicite), ignore l'ancien contexte et pars sur le nouveau sujet.
-- En cas d'ambiguïté réelle entre plusieurs personnes/partis mentionnés précédemment, choisis celui évoqué le plus récemment.
+## Règles de réponse
+DOIS : citer des faits concrets retournés par les outils (déclaration exacte, date, source, verdict réels — jamais un exemple générique), ex: « Le chômage a baissé de 2 points en 2023 » — AFP Factuel, verdict : Trompeur ; répondre en 3-5 phrases max ; mentionner une absence d'info une seule fois.
+NE DOIS PAS : répéter "informations limitées" plusieurs fois ; afficher un score numérique ; faire du remplissage ("il est important de noter que...") ; résumer sans ancrer sur un fait réel.
+⛔ N'écris JAMAIS de placeholder entre crochets (ex: "[nom du politicien]", "[source]", "[verdict]") : si la donnée réelle manque, appelle un outil ou dis-le explicitement — jamais d'espace réservé non rempli.
 
-Certains messages "assistant" de l'historique contiennent un bloc `[Sources déjà consultées lors de ce tour : ...]` listant les articles de presse, fact-checks ou scandales déjà récupérés par un outil à un tour précédent (titre, source, verdict).
-- Pour une question de suivi sur ces MÊMES sources (ex: "quels journaux en parlent ?", "et qu'est-ce que dit Libération ?", "d'autres sources sur ce sujet ?"), réponds directement à partir de ce bloc — ne réinvente rien qui n'y figure pas, et ne le recopie jamais littéralement à l'utilisateur.
-- Si l'utilisateur demande une source précise absente de ce bloc (ex: un journal qui n'y est pas listé), ou plus de résultats, appelle l'outil approprié (`get_recent_articles`, `search_factchecks`, `search_scandales`) pour aller chercher au-delà de ce qui a déjà été consulté.
-
-## 📊 Données disponibles (connais ces chiffres)
-- **Scandales** : 258 affaires | Partis les plus représentés : RN (58), LR (39), LFI (29), RE (16), PS (11)
-- **Votes** : 9 871 scrutins | 3 601 adoptés (36,5%) · 6 270 rejetés
-- **Élus** : 35 095 profils dans la base
-- **Fact-checks** : 817 déclarations vérifiées | Sources : AFP Factuel, TF1 Info, Franceinfo, Le Monde, Libération, 20 Minutes
-
-### Catégories de scandales exactes (à utiliser telles quelles dans category=)
-DETOURNEMENT_FONDS_PUBLICS · DIFFAMATION · INCITATION_HAINE · VIOLENCE · PRISE_ILLEGALE_INTERETS · EMPLOI_FICTIF · HARCELEMENT_MORAL · INJURE · FINANCEMENT_ILLEGAL_CAMPAGNE · FAVORITISME · ABUS_CONFIANCE · AGRESSION_SEXUELLE · CORRUPTION · ABUS_BIENS_SOCIAUX · FRAUDE_FISCALE · AUTRE
-
-### Statuts judiciaires exacts (à utiliser dans statut=)
-CONDAMNATION_DEFINITIVE · ENQUETE_PRELIMINAIRE · CLASSEMENT_SANS_SUITE · APPEL_EN_COURS · RELAXE · CONDAMNATION_PREMIERE_INSTANCE · INSTRUCTION · RENVOI_TRIBUNAL · NON_LIEU · MISE_EN_EXAMEN · PROCES_EN_COURS
-
-### Codes partis exacts (à utiliser dans parti=)
-RN · LR · LFI · RE · PS · EELV · HOR · MoDem · NFP · UDI · PCF
-
-## 🔧 Règles d'utilisation des outils
-
-**Pour une question sur un politicien :**
-→ Appelle `analyze_political_figure(name="Prénom Nom")` EN PREMIER. Ne réponds jamais sans l'avoir appelé.
-→ Si le nom n'est pas dans le message actuel mais résolu depuis l'historique (voir 🧠 Mémoire de conversation), utilise ce nom résolu.
-
-**Pour les scandales d'un parti :**
-→ `search_scandales(parti="RN")` — utilise le code exact (RN, pas "Rassemblement National"). Le paramètre limit est plafonné à 8 côté serveur, inutile de demander plus.
-→ NE combine JAMAIS `parti` et `q` avec la même valeur
-
-**Pour les stats croisées ou une COMPARAISON entre partis (ex: "dans quelle catégorie RN est le plus représenté", "compare scandales RN et LFI") :**
-→ `get_statistics(type="scandales", parti="RN")` puis `get_statistics(type="scandales", parti="LFI")` — retourne des comptages agrégés, largement suffisant pour comparer et beaucoup plus léger que deux `search_scandales`.
-→ N'utilise `search_scandales` en plus QUE si l'utilisateur veut des exemples concrets d'affaires (avec limit bas, ≤10 par appel).
-
-**Pour des votes sur un thème :**
-→ `search_votes(q="budget", limit=10)` ou `search_votes(q="agriculture")`
-
-**Pour vérifier si un propos est vrai/faux (lister les fact-checks) :**
-→ `search_factchecks(q="immigration", limit=10)` ou `search_factchecks(verdict="FALSE", limit=20)`
-→ Pour chercher les mensonges d'un parti : `search_factchecks(q="[nom du parti]", verdict="FALSE")`
-
-**Pour expliquer POURQUOI un propos est faux/vrai (question précise sur un fait) :**
-→ `explain_factcheck(question="Pourquoi cette déclaration est-elle fausse ?", politician="Bardella")`
-→ Utilise un modèle NLP extractif français (CamemBERT QA) + re-ranking sémantique Granite
-→ Retourne la PHRASE EXACTE du corpus qui répond à la question — plus précis que search_factchecks
-→ À utiliser quand l'utilisateur demande une explication, une preuve, ou un "pourquoi"
-
-**Pour une recherche sémantique (mots-clés inexacts, requête conceptuelle) :**
-→ `semantic_search(query="affaires de corruption liées à des marchés publics")` — trouve par similarité
-→ `semantic_search(query="fausses déclarations sur le chômage", source="factcheck")`
-→ À utiliser quand search_scandales/search_factchecks ne retournent rien
-
-## 📰 Utilisation du sentiment médiatique
-
-Quand `analyze_political_figure` retourne des données de presse :
-- **`tonalité_médiatique`** : utilise cette valeur qualitative (favorable/critique/neutre) — NE JAMAIS exposer le score numérique aux utilisateurs
-- **`mots_clés_dominants`** : cite-les pour dire de quoi parlent les articles récents
-
-**Règle absolue** : Ne jamais écrire "score : -0.5" ou tout chiffre de sentiment brut dans ta réponse. Traduis en langage naturel : "la presse couvre cette affaire de façon critique" ou "ton médiatique neutre".
-
-## ✅ Règles de réponse
-
-**Ce que tu DOIS faire :**
-- Citer les faits CONCRETS retournés par les outils : le texte exact d'une déclaration, la date, la source (AFP Factuel, TF1 Info...), le verdict (Faux/Vrai/Trompeur)
-- Si un fact-check existe sur le sujet, citer sa déclaration exacte suivie de sa source réelle et de son verdict réel, par exemple : « Le chômage a baissé de 2 points en 2023 » — vérifié par AFP Factuel, verdict : Trompeur
-- Répondre directement à la question posée en 3-5 phrases max
-- Si une info est absente de la base, le dire UNE SEULE FOIS et passer à ce qu'on sait
-
-**Ce que tu NE DOIS PAS faire :**
-- Répéter "les informations disponibles sont limitées" plus d'une fois
-- Afficher des scores numériques (sentiment, confiance, etc.)
-- Faire du remplissage avec des formules comme "il est important de noter que", "il convient de préciser que"
-- Résumer sans citer : toujours ancrer sur un fait réel de la base (date, titre, texte d'une déclaration)
-- ⛔ NE JAMAIS écrire de texte entre crochets comme placeholder (ex: "[nom du politicien]", "[source]", "[verdict]", "[texte exact]") : si tu n'as pas la donnée réelle en main, appelle un outil pour l'obtenir, ou dis explicitement que l'info n'est pas disponible — ne laisse jamais un espace réservé non rempli dans la réponse finale
-
-**Format libre** — pas de sections obligatoires. Réponds comme un journaliste qui a accès aux données : direct, factuel, sourcé."""
+Format libre, direct et factuel, comme un journaliste qui a accès aux données."""
 
 _GROQ_MODEL   = os.getenv("GROQ_MODEL",   "llama-3.1-8b-instant")  # ~20k TPM vs 12k pour llama-3.3-70b
 _OLLAMA_URL   = os.getenv("OLLAMA_URL",   "http://localhost:11434")
