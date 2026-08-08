@@ -207,25 +207,27 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
         {/* Mandats */}
         {tab === "Mandats" && (
           profile.mandates?.length
-            ? <table style={tbl}>
-                <thead><tr>
-                  {["Type", "Titre", "Institution", "Circonscription", "Début", "Fin", "Actif"].map((h) =>
-                    <th key={h} style={th}>{h}</th>)}
-                </tr></thead>
-                <tbody>
-                  {profile.mandates.map((m, i) => (
-                    <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#f9faff" }}>
-                      <td style={td}><span style={badge("#e8eeff","#1a3a6e")}>{m.type}</span></td>
-                      <td style={td}>{m.title}</td>
-                      <td style={td}>{m.institution}</td>
-                      <td style={td}>{m.constituency || "—"}</td>
-                      <td style={td}>{m.startDate ? new Date(m.startDate).toLocaleDateString("fr-FR") : "—"}</td>
-                      <td style={td}>{m.endDate   ? new Date(m.endDate).toLocaleDateString("fr-FR")   : "—"}</td>
-                      <td style={td}>{m.isCurrent ? "✓" : ""}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            ? <div style={{ overflowX: "auto" }}>
+                <table style={tbl}>
+                  <thead><tr>
+                    {["Type", "Titre", "Institution", "Circonscription", "Début", "Fin", "Actif"].map((h) =>
+                      <th key={h} style={th}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {profile.mandates.map((m, i) => (
+                      <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#f9faff" }}>
+                        <td style={td}><span style={badge("#e8eeff","#1a3a6e")}>{m.type}</span></td>
+                        <td style={td}>{m.title}</td>
+                        <td style={td}>{m.institution}</td>
+                        <td style={td}>{m.constituency || "—"}</td>
+                        <td style={td}>{m.startDate ? new Date(m.startDate).toLocaleDateString("fr-FR") : "—"}</td>
+                        <td style={td}>{m.endDate   ? new Date(m.endDate).toLocaleDateString("fr-FR")   : "—"}</td>
+                        <td style={td}>{m.isCurrent ? "✓" : ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             : <p style={{ color: "#888" }}>Aucun mandat recensé.</p>
         )}
 
@@ -263,35 +265,37 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
                 <StatBox label="Participation"  value={votes.stats?.participationRate != null ? votes.stats.participationRate + "%" : null} />
               </div>
               {votes.votes?.length
-                ? <table style={tbl}>
-                    <thead><tr>
-                      {["Position", "Titre du scrutin", "Date", "Résultat global"].map((h) =>
-                        <th key={h} style={th}>{h}</th>)}
-                    </tr></thead>
-                    <tbody>
-                      {votes.votes.map((v, i) => (
-                        <tr key={i}
-                          style={{ background: i % 2 === 0 ? "#fff" : "#f9faff", cursor: "pointer" }}
-                          onClick={() => onNavigate("exploration", { tab: "votes", q: v.scrutin?.title?.slice(0, 60) || "" })}
-                          onMouseEnter={(e) => e.currentTarget.style.background = "#eef2ff"}
-                          onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? "#fff" : "#f9faff"}>
-                          <td style={td}>
-                            <span style={badge(
-                              v.position === "POUR" ? "#e8fdf0" : v.position === "CONTRE" ? "#fde8e8" : "#fff8e8",
-                              v.position === "POUR" ? "#2ecc71" : v.position === "CONTRE" ? "#e74c3c" : "#f39c12"
-                            )}>{v.position}</span>
-                          </td>
-                          <td style={{ ...td, maxWidth: 360 }}>{v.scrutin?.title?.slice(0,80)}…</td>
-                          <td style={td}>{v.scrutin?.votingDate ? new Date(v.scrutin.votingDate).toLocaleDateString("fr-FR") : "—"}</td>
-                          <td style={td}>
-                            <span style={{ color: v.scrutin?.result === "ADOPTED" ? "#2ecc71" : "#e74c3c", fontWeight:600 }}>
-                              {v.scrutin?.result === "ADOPTED" ? "Adopté" : "Rejeté"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                ? <div style={{ overflowX: "auto" }}>
+                    <table style={tbl}>
+                      <thead><tr>
+                        {["Position", "Titre du scrutin", "Date", "Résultat global"].map((h) =>
+                          <th key={h} style={th}>{h}</th>)}
+                      </tr></thead>
+                      <tbody>
+                        {votes.votes.map((v, i) => (
+                          <tr key={i}
+                            style={{ background: i % 2 === 0 ? "#fff" : "#f9faff", cursor: "pointer" }}
+                            onClick={() => onNavigate("exploration", { tab: "votes", q: v.scrutin?.title?.slice(0, 60) || "" })}
+                            onMouseEnter={(e) => e.currentTarget.style.background = "#eef2ff"}
+                            onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? "#fff" : "#f9faff"}>
+                            <td style={td}>
+                              <span style={badge(
+                                v.position === "POUR" ? "#e8fdf0" : v.position === "CONTRE" ? "#fde8e8" : "#fff8e8",
+                                v.position === "POUR" ? "#2ecc71" : v.position === "CONTRE" ? "#e74c3c" : "#f39c12"
+                              )}>{v.position}</span>
+                            </td>
+                            <td style={{ ...td, maxWidth: 360 }}>{v.scrutin?.title?.slice(0,80)}…</td>
+                            <td style={td}>{v.scrutin?.votingDate ? new Date(v.scrutin.votingDate).toLocaleDateString("fr-FR") : "—"}</td>
+                            <td style={td}>
+                              <span style={{ color: v.scrutin?.result === "ADOPTED" ? "#2ecc71" : "#e74c3c", fontWeight:600 }}>
+                                {v.scrutin?.result === "ADOPTED" ? "Adopté" : "Rejeté"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 : <p style={{ color: "#888" }}>Aucun vote individuel disponible.</p>
               }
               <Pager pagination={votes.pagination} onPage={setVotePage} />

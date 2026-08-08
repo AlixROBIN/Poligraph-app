@@ -40,3 +40,28 @@
   color: white;
   font-weight: 600;
 }
+
+/* ── Responsive mobile ───────────────────────────────────── */
+@media (max-width: 768px) {
+  .navbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 0.5rem 0.75rem;
+    gap: 0.4rem 0.5rem;
+  }
+  .navbar h1 {
+    font-size: 1rem;
+  }
+  .nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 0.3rem;
+  }
+  .nav-links button {
+    height: auto;
+    margin-left: 0;
+    padding: 0.4rem 0.6rem;
+    font-size: 12px;
+  }
+}
