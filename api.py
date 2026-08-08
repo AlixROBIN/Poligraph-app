@@ -2044,7 +2044,7 @@ AGENT_TOOLS = [
                     },
                     "annee_min": {"type": "string", "description": "Année minimale des faits (ex: '2015')"},
                     "annee_max": {"type": "string", "description": "Année maximale des faits (ex: '2024')"},
-                    "limit":     {"type": "string", "description": "Nombre de résultats (défaut 10, max 15 — chaque résultat inclut une description, garder ce nombre bas)"},
+                    "limit":     {"type": "string", "description": "Nombre de résultats (max 8, fixe — chaque résultat inclut une description, le budget de tokens Groq est serré)"},
                 },
                 "required": [],
             },
@@ -2218,7 +2218,7 @@ def _tool_search_scandales(q="", category="", parti="", statut="",
     try:
         annee_min = int(annee_min) if annee_min else 0
         annee_max = int(annee_max) if annee_max else 9999
-        limit = min(int(limit) if limit else 10, 15)
+        limit = min(int(limit) if limit else 8, 8)
         sc = _df_scandales if _df_scandales is not None else pd.read_csv(ANALYTICS_DIR / "scandales_features.csv", low_memory=False)
         sc = sc.copy()
         if q:
@@ -2246,7 +2246,7 @@ def _tool_search_scandales(q="", category="", parti="", statut="",
         # elle fait à elle seule exploser le budget TPM Groq dès 2-3 résultats.
         for r in results:
             if "description" in r:
-                r["description"] = str(r["description"])[:200]
+                r["description"] = str(r["description"])[:130]
         return {"total_trouvé": len(sc), "résultats": results}
     except Exception as e:
         return {"erreur": str(e), "résultats": []}
@@ -2688,7 +2688,7 @@ RN · LR · LFI · RE · PS · EELV · HOR · MoDem · NFP · UDI · PCF
 → Si le nom n'est pas dans le message actuel mais résolu depuis l'historique (voir 🧠 Mémoire de conversation), utilise ce nom résolu.
 
 **Pour les scandales d'un parti :**
-→ `search_scandales(parti="RN", limit=10)` — utilise le code exact (RN, pas "Rassemblement National"), ne dépasse jamais limit=10
+→ `search_scandales(parti="RN")` — utilise le code exact (RN, pas "Rassemblement National"). Le paramètre limit est plafonné à 8 côté serveur, inutile de demander plus.
 → NE combine JAMAIS `parti` et `q` avec la même valeur
 
 **Pour les stats croisées ou une COMPARAISON entre partis (ex: "dans quelle catégorie RN est le plus représenté", "compare scandales RN et LFI") :**
