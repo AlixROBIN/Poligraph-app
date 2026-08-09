@@ -2209,10 +2209,14 @@ def _tool_search_scandales(q="", category="", parti="", statut="",
         cols = [c for c in cols if c in sc.columns]
         results = sc[cols].head(limit).fillna("").to_dict(orient="records")
         # "description" fait ~960 caractères en moyenne (jusqu'à 1567) — non tronquée,
-        # elle fait à elle seule exploser le budget TPM Groq dès 2-3 résultats.
+        # elle fait à elle seule exploser le budget TPM Groq. On adapte la longueur
+        # gardée au nombre de résultats : peu de résultats (question ciblée, souvent
+        # sur des détails précis comme un montant) → on garde beaucoup plus de texte,
+        # car le budget total reste petit de toute façon.
+        desc_len = 500 if len(results) <= 5 else 250 if len(results) <= 10 else 130
         for r in results:
             if "description" in r:
-                r["description"] = str(r["description"])[:130]
+                r["description"] = str(r["description"])[:desc_len]
         return {"total_trouvé": len(sc), "résultats": results}
     except Exception as e:
         return {"erreur": str(e), "résultats": []}
@@ -2639,6 +2643,10 @@ Utilise `tonalité_médiatique` (favorable/critique/neutre) et `mots_clés_domin
 DOIS : citer des faits concrets retournés par les outils (déclaration exacte, date, source, verdict réels — jamais un exemple générique), ex: « Le chômage a baissé de 2 points en 2023 » — AFP Factuel, verdict : Trompeur ; répondre en 3-5 phrases max ; mentionner une absence d'info une seule fois.
 NE DOIS PAS : répéter "informations limitées" plusieurs fois ; afficher un score numérique ; faire du remplissage ("il est important de noter que...") ; résumer sans ancrer sur un fait réel.
 ⛔ N'écris JAMAIS de placeholder entre crochets (ex: "[nom du politicien]", "[source]", "[verdict]") : si la donnée réelle manque, appelle un outil ou dis-le explicitement — jamais d'espace réservé non rempli.
+
+⛔ RÈGLE ABSOLUE — ANTI-INVENTION : ces politiciens sont des personnes réelles, nommées. N'invente JAMAIS un nom, un statut judiciaire (mis en examen/condamné/relaxé...), une peine ou un montant en euros qui n'apparaît pas MOT POUR MOT dans un résultat d'outil déjà reçu dans cette conversation. Les montants financiers ne sont PAS un champ structuré de la base — ils n'apparaissent que parfois dans le texte libre d'une description ; si absents des résultats reçus, dis "ce montant n'est pas précisé dans la base", ne le devine jamais.
+Si la question porte sur un détail précis que tu n'as pas encore (noms individuels, montant, peine) et que tu n'as appelé jusqu'ici que `get_statistics` (agrégats, sans noms), appelle `search_scandales` (avec category= et parti=) AVANT de répondre.
+Si l'utilisateur te corrige ou conteste un fait, ne t'excuse pas en improvisant un NOUVEAU détail non vérifié pour lui faire plaisir — ré-appelle l'outil concerné pour vérifier, ou dis que tu ne peux pas confirmer sans données.
 
 Format libre, direct et factuel, comme un journaliste qui a accès aux données."""
 
