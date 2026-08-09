@@ -5,6 +5,7 @@ API FastAPI — données Analytics + prédictions ML
 import ast
 import asyncio
 import hashlib
+import inspect
 import json
 import os
 import pickle
@@ -2068,8 +2069,10 @@ AGENT_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "type":  {"type": "string", "enum": ["scandales", "votes", "partis", "elus"]},
-                    "parti": {"type": "string", "description": "Filtrer scandales par parti (ex: RN)"},
+                    "type":      {"type": "string", "enum": ["scandales", "votes", "partis", "elus"]},
+                    "parti":     {"type": "string", "description": "Filtrer scandales par parti (ex: RN)"},
+                    "annee_min": {"type": "string", "description": "Filtrer scandales : année min des faits (ex: '2020')"},
+                    "annee_max": {"type": "string", "description": "Filtrer scandales : année max des faits"},
                 },
                 "required": ["type"],
             },
@@ -2236,7 +2239,7 @@ def _tool_search_votes(q="", result="", annee=0, limit=10):
         return {"erreur": str(e), "résultats": []}
 
 
-def _tool_get_statistics(type: str, parti: str = ""):
+def _tool_get_statistics(type: str, parti: str = "", annee_min="", annee_max=""):
     try:
         sc = _df_scandales if _df_scandales is not None else pd.DataFrame()
         vt = _df_votes     if _df_votes     is not None else pd.DataFrame()
@@ -2244,6 +2247,10 @@ def _tool_get_statistics(type: str, parti: str = ""):
 
         if type == "scandales":
             sc_f = sc[sc["party_short"] == parti.upper()] if parti and "party_short" in sc.columns else sc
+            if annee_min and "annee_faits" in sc_f.columns:
+                sc_f = sc_f[pd.to_numeric(sc_f["annee_faits"], errors="coerce").fillna(0) >= int(annee_min)]
+            if annee_max and "annee_faits" in sc_f.columns:
+                sc_f = sc_f[pd.to_numeric(sc_f["annee_faits"], errors="coerce").fillna(9999) <= int(annee_max)]
             return {
                 "total":         len(sc_f),
                 "filtre_parti":  parti.upper() if parti else "tous",
@@ -2592,8 +2599,13 @@ def _execute_agent_tool(tool_name: str, tool_input: dict) -> dict:
     fn = dispatch.get(tool_name)
     if fn is None:
         return {"erreur": f"Outil inconnu : {tool_name}"}
+    # Le LLM invente parfois un paramètre absent de la signature (ex: annee_min
+    # sur un outil qui ne le supporte pas) — on l'ignore plutôt que de faire
+    # échouer tout l'appel, pour rester tolérant aux dérives du modèle.
+    accepted = set(inspect.signature(fn).parameters)
+    safe_input = {k: v for k, v in tool_input.items() if k in accepted}
     try:
-        return fn(**tool_input)
+        return fn(**safe_input)
     except TypeError as e:
         return {"erreur": f"Paramètres invalides pour {tool_name} : {e}"}
 
