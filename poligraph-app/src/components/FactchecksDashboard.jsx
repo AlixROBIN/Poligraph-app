@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import candidatsData from "../data/candidats.json";
+import ReliabilityScatter from "./ReliabilityScatter";
 
 const BASE = (process.env.REACT_APP_API_URL || "http://localhost:8000") + "/api";
 
@@ -865,19 +866,9 @@ export default function FactchecksDashboard({ onNavigate, initialTab }) {
       {/* ── Onglet Politiciens ── */}
       {tab === "factchecks" && (
         <>
-          <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem" }}>
-            <RankingCard
-              title="Politiciens les plus fiables"
-              subtitle="Score net lissé : propos vrais − faux (sur déclarations du politicien, ≥3 FC). Cliquer pour voir les fact-checks."
-              items={data.most_reliable || []}
-              metric="pct_vrai" color="#27ae60"
-              onClickPolitician={openPol}
-            />
-            <RankingCard
-              title="Politiciens les moins fiables"
-              subtitle="Score net lissé le plus bas (même méthode) — un politicien ne peut pas être dans les deux listes."
-              items={data.least_reliable || []}
-              metric="pct_faux" color="#e74c3c"
+          <div style={{ marginBottom: "1.5rem" }}>
+            <ReliabilityScatter
+              items={[...(data.most_reliable || []), ...(data.least_reliable || [])]}
               onClickPolitician={openPol}
             />
           </div>

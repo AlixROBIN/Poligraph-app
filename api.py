@@ -1216,7 +1216,7 @@ def dashboard_factchecks():
     Agrège tous les fact-checks (817) depuis poligraph.fr.
     Cache 30 minutes — calcule classements politiciens, partis, verdicts, sources.
     """
-    cache_key = ("dashboard_fc", "v3")
+    cache_key = ("dashboard_fc", "v4")
     entry = _pg_cache.get(cache_key)
     if entry and time.time() - entry["at"] < 1800:
         return entry["data"]
@@ -1312,6 +1312,15 @@ def dashboard_factchecks():
     _pol_ordered   = sorted(pol_honesty, key=lambda x: -x["net_score"])
     most_reliable  = _pol_ordered[:10]
     least_reliable = list(reversed(_pol_ordered[-10:]))
+
+    # Photo réelle pour le nuage de points (visage + nom) — un seul appel par
+    # politicien du top/bottom 10, caché via _pg comme le reste des proxys.
+    for entry in most_reliable + least_reliable:
+        try:
+            detail = _pg(f"politiques/{entry['slug']}", cache=True)
+            entry["photoUrl"] = detail.get("photoUrl")
+        except Exception:
+            entry["photoUrl"] = None
 
     # Les plus mentionnés dans des fact-checks (toutes déclarations confondues)
     most_mentioned = sorted(

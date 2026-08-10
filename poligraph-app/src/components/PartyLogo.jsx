@@ -3,7 +3,7 @@ import { fetchPartis } from "../data/api";
 
 let _byShortName = null;
 
-function useParties() {
+export function useParties() {
   const [ready, setReady] = useState(!!_byShortName);
   useEffect(() => {
     if (_byShortName) return;
