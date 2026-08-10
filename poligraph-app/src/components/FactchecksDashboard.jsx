@@ -978,7 +978,7 @@ export default function FactchecksDashboard({ onNavigate, initialTab }) {
               const bias = SOURCE_BIAS[s.name] || { lean: "Non classifié", color: "#95a5a6", owner: "?" };
               const barW = Math.round(s.count / (data.total || 1) * 100);
               return (
-                <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 200px 120px 90px", alignItems: "center", gap: 14, padding: "10px 14px", borderRadius: 10, border: "1px solid #e8ecf8", background: "#fafbfe" }}>
+                <div key={i} className="row-grid-c" style={{ alignItems: "center", gap: 14, padding: "10px 14px", borderRadius: 10, border: "1px solid #e8ecf8", background: "#fafbfe" }}>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 14, color: "#1a2e5a", marginBottom: 2 }}>{s.name}</div>
                     <div style={{ fontSize: 11, color: "#888" }}>Propriétaire : {bias.owner}</div>

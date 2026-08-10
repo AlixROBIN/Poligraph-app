@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import PartyLogo from "./PartyLogo";
 
 const BASE_URL     = (process.env.REACT_APP_API_URL || "http://localhost:8000") + "/api";
 const PROXY_URL    = (process.env.REACT_APP_API_URL || "http://localhost:8000") + "/api/proxy";
@@ -374,7 +375,7 @@ const ScandalSearch = ({ filters, initial = {} }) => {
                         <td style={tdStyle}><Badge text={row.category} /></td>
                         <td style={tdStyle}><span style={{ fontSize: 11 }}>{row.status?.replace(/_/g, " ")}</span></td>
                         <td style={tdStyle}>{row.politician_name}</td>
-                        <td style={tdStyle}><strong>{row.party_short}</strong></td>
+                        <td style={tdStyle}>{row.party_short ? <PartyLogo code={row.party_short} size={14} /> : "—"}</td>
                         <td style={tdStyle}>{row.annee_faits || "—"}</td>
                       </tr>
                       {isSelected && (

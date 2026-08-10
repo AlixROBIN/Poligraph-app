@@ -4,6 +4,7 @@ import {
   CartesianGrid, Cell, PieChart, Pie, LabelList,
 } from "recharts";
 import { fetchDashboardScandales } from "../data/api";
+import Hemicycle from "./Hemicycle";
 
 const COLORS = [
   "#c0392b", "#e74c3c", "#e67e22", "#f39c12", "#1a3a6e",
@@ -134,12 +135,17 @@ export default function ScandalsDashboard({ onNavigate }) {
       </div>
 
       {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
         <KPI icon="📁" label="Affaires recensées"   value={data.total?.toLocaleString()} color="#c0392b" />
         <KPI icon="🏛" label="Partis impliqués"     value={totalPartis}                  color="#1a3a6e" />
         <KPI icon="📋" label="Catégories d'infraction" value={totalCats}                 color="#8e44ad" />
         <KPI icon="⚖" label="Condamnations"         value={condamnes.toLocaleString()}   color="#7b0000"
           sub="statut CONDAMNÉ" />
+      </div>
+
+      {/* Hémicycle — Assemblée nationale actuelle par parti (données réelles) */}
+      <div style={{ marginBottom: "1.5rem" }}>
+        <Hemicycle onNavigate={onNavigate} />
       </div>
 
       {/* Timeline pleine largeur */}
@@ -170,7 +176,7 @@ export default function ScandalsDashboard({ onNavigate }) {
       </div>
 
       {/* Partis + Catégories */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
+      <div className="dashboard-2col-grid" style={{ marginBottom: "1.5rem" }}>
         <Card title="Affaires par parti politique (top 12)"
           subtitle="Cliquez sur un parti pour explorer ses affaires">
           <ResponsiveContainer width="100%" height={340}>
@@ -207,7 +213,7 @@ export default function ScandalsDashboard({ onNavigate }) {
       {/* Statut judiciaire */}
       <Card title="Statut judiciaire des affaires"
         subtitle="Cliquez sur un statut pour filtrer — répartition complète des dossiers">
-        <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: "2rem", alignItems: "center" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "2rem", alignItems: "center" }}>
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie data={statuts} dataKey="value" nameKey="name"

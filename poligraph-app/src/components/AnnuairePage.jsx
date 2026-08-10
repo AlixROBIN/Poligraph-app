@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import PartyLogo from "./PartyLogo";
 
 const BASE_URL = (process.env.REACT_APP_API_URL || "http://localhost:8000") + "/api/proxy";
 
@@ -19,7 +20,11 @@ const PartyBadge = ({ party }) => {
   if (!party) return <span style={badge("#ccc", "#555")}>Indépendant</span>;
   const name  = party.shortName || party.name || "?";
   const color = party.color || "#1a3a6e";
-  return <span style={badge(color + "22", color)}>{name}</span>;
+  return (
+    <span style={badge(color + "22", color)}>
+      <PartyLogo code={name} size={13} />
+    </span>
+  );
 };
 
 const badge = (bg, color) => ({

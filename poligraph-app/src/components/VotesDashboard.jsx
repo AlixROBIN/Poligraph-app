@@ -177,9 +177,9 @@ export default function VotesDashboard({ onNavigate }) {
               const clickable = t.name !== "Autres";
               return (
                 <div key={t.name}
+                  className="row-grid-a"
                   onClick={() => clickable && go({ theme: t.name })}
                   style={{
-                    display: "grid", gridTemplateColumns: "165px 1fr 110px 90px",
                     alignItems: "center", gap: 12,
                     padding: "8px 10px", borderRadius: 8, cursor: clickable ? "pointer" : "default",
                     transition: "background 0.15s",
@@ -263,9 +263,9 @@ export default function VotesDashboard({ onNavigate }) {
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {groupList.map((g, i) => (
                 <div key={i}
+                  className="row-grid-b"
                   onClick={() => go({ q: g.name })}
                   style={{
-                    display: "grid", gridTemplateColumns: "90px 1fr 190px",
                     alignItems: "center", gap: 10,
                     padding: "6px 8px", borderRadius: 8, cursor: "pointer",
                     transition: "background 0.12s",

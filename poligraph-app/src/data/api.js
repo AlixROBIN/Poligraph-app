@@ -62,6 +62,25 @@ export async function fetchSourceMetrics() {
   return res.json();
 }
 
+export async function fetchHemicycle() {
+  const res = await fetch(`${BASE_URL}/hemicycle`);
+  if (!res.ok) throw new Error("Hemicycle error");
+  return res.json();
+}
+
+let _partisPromise = null;
+export function fetchPartis() {
+  // Mise en cache mémoire simple — la liste des partis est réutilisée par
+  // plusieurs composants (badges, tableaux) et ne change quasiment jamais.
+  if (!_partisPromise) {
+    _partisPromise = fetch(`${BASE_URL}/proxy/partis?limit=150`)
+      .then((res) => { if (!res.ok) throw new Error("Partis error"); return res.json(); })
+      .then((json) => json.data || [])
+      .catch((e) => { _partisPromise = null; throw e; });
+  }
+  return _partisPromise;
+}
+
 export async function sendChat({ message, history = [] }) {
   const res = await fetch(`${BASE_URL}/chat`, {
     method: "POST",

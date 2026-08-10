@@ -898,7 +898,10 @@ def _pg(path: str, params: dict = None, cache: bool = True):
     if r.status_code == 404:
         raise HTTPException(status_code=404, detail="Ressource introuvable")
     r.raise_for_status()
-    data = r.json()
+    # L'API Poligraph répond en UTF-8 sans charset explicite dans le Content-Type ;
+    # requests devine alors mal l'encodage (mojibake sur les accents). On décode
+    # le contenu brut en UTF-8 explicitement plutôt que de laisser r.json() deviner.
+    data = json.loads(r.content.decode("utf-8"))
     if cache:
         _pg_cache[cache_key] = {"data": data, "at": time.time()}
     return data
@@ -920,6 +923,80 @@ def proxy_politiques_detail(slug: str):
 @app.get("/api/proxy/politiques/{slug}/affaires")
 def proxy_politiques_affaires(slug: str):
     return _pg(f"politiques/{slug}/affaires")
+
+
+@app.get("/api/proxy/partis")
+def proxy_partis(limit: int = 100, page: int = 1):
+    return _pg("partis", {"limit": limit, "page": page})
+
+
+@app.get("/api/proxy/partis/{slug}")
+def proxy_partis_detail(slug: str):
+    return _pg(f"partis/{slug}")
+
+
+# ── Hémicycle — répartition réelle des député·e·s actuel·le·s par parti ────
+# poligraph.fr n'expose pas de champ "sièges à l'Assemblée" direct : on le
+# reconstruit en comptant, pour chaque grand parti, les membres dont le
+# mandat en cours est de type DEPUTE. Coûteux (10 appels externes), donc
+# caché longtemps (24h) séparément du cache _pg générique (10 min).
+_HEMICYCLE_PARTIES = [
+    ("rassemblement-national",                     "RN"),
+    ("les-republicains",                           "LR"),
+    ("renaissance",                                "RE"),
+    ("la-france-insoumise",                        "LFI"),
+    ("socialistes-et-apparentes",                  "PS"),
+    ("les-ecologistes-europe-ecologie-les-verts",  "EELV"),
+    ("mouvement-democrate",                        "MoDem"),
+    ("horizons",                                   "HOR"),
+    ("union-des-democrates-et-independants",       "UDI"),
+    ("parti-communiste-francais",                  "PCF"),
+]
+_HEMICYCLE_CACHE: dict = {"data": None, "at": 0.0}
+_HEMICYCLE_TTL = 24 * 3600
+_ASSEMBLEE_TOTAL_SIEGES = 577
+
+
+@app.get("/api/hemicycle")
+def hemicycle():
+    """Répartition des député·e·s actuel·le·s de l'Assemblée nationale par parti (données réelles poligraph.fr)."""
+    now = time.time()
+    if _HEMICYCLE_CACHE["data"] and now - _HEMICYCLE_CACHE["at"] < _HEMICYCLE_TTL:
+        return _HEMICYCLE_CACHE["data"]
+
+    partis = []
+    couverts = 0
+    for slug, code in _HEMICYCLE_PARTIES:
+        try:
+            detail = _pg(f"partis/{slug}", cache=True)
+        except Exception as e:
+            logger.warning(f"[Hémicycle] échec {slug} : {e}")
+            continue
+        members = detail.get("members") or []
+        deputes = sum(1 for m in members if (m.get("currentMandate") or {}).get("type") == "DEPUTE")
+        if deputes <= 0:
+            continue
+        couverts += deputes
+        partis.append({
+            "code":    code,
+            "name":    detail.get("name") or code,
+            "slug":    slug,
+            "color":   detail.get("color") or "#888",
+            "logoUrl": detail.get("logoUrl"),
+            "deputes": deputes,
+        })
+
+    partis.sort(key=lambda p: -p["deputes"])
+    result = {
+        "partis":         partis,
+        "total_sieges":   _ASSEMBLEE_TOTAL_SIEGES,
+        "sieges_couverts": couverts,
+        "autres_non_inscrits": max(0, _ASSEMBLEE_TOTAL_SIEGES - couverts),
+        "source": "poligraph.fr — comptage des mandats DEPUTE en cours par parti",
+    }
+    _HEMICYCLE_CACHE["data"] = result
+    _HEMICYCLE_CACHE["at"]   = now
+    return result
 
 
 @app.get("/api/proxy/politiques/{slug}/votes")

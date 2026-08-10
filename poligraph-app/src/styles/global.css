@@ -12,3 +12,28 @@
     padding: 1rem 0.75rem;
   }
 }
+
+.dashboard-2col-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 760px) {
+  .dashboard-2col-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Lignes de tableau à colonnes fixes (thèmes de vote, groupes parlementaires,
+   sources de fact-checks) — cassent sur mobile sans ce point de rupture. */
+.row-grid-a { display: grid; grid-template-columns: 165px 1fr 110px 90px; }
+.row-grid-b { display: grid; grid-template-columns: 90px 1fr 190px; }
+.row-grid-c { display: grid; grid-template-columns: 1fr 200px 120px 90px; }
+
+@media (max-width: 640px) {
+  .row-grid-a, .row-grid-b, .row-grid-c {
+    grid-template-columns: 1fr;
+    gap: 6px !important;
+  }
+}
