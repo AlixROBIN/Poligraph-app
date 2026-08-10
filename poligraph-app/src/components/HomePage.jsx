@@ -7,7 +7,7 @@ const BLOC = {
     icon: "⚖",
     title: "Scandales politiques",
     color: "#c0392b",
-    gradient: "linear-gradient(135deg, #c0392b 0%, #e74c3c 100%)",
+    gradient: "linear-gradient(160deg, #b8342a 0%, #d94a3d 100%)",
     desc: "Retrouvez toutes les affaires judiciaires, condamnations et mises en examen impliquant des élus français.",
     expl: "Corruption, détournement de fonds, abus de biens sociaux… analysez qui est impliqué et dans quel parti.",
     cta: "Explorer les scandales",
@@ -18,7 +18,7 @@ const BLOC = {
     icon: "🗳",
     title: "Votes parlementaires",
     color: "#1a3a6e",
-    gradient: "linear-gradient(135deg, #1a3a6e 0%, #2980b9 100%)",
+    gradient: "linear-gradient(160deg, #1a3a6e 0%, #2c5282 100%)",
     desc: "Consultez l'ensemble des scrutins de l'Assemblée nationale : qui a voté quoi et comment.",
     expl: "Chaque loi adoptée ou rejetée, avec le détail des votes pour, contre et les abstentions.",
     cta: "Explorer les votes",
@@ -29,7 +29,7 @@ const BLOC = {
     icon: "✓",
     title: "Fact-checking",
     color: "#8e44ad",
-    gradient: "linear-gradient(135deg, #6c3483 0%, #8e44ad 100%)",
+    gradient: "linear-gradient(160deg, #5e2f78 0%, #7c3d9e 100%)",
     desc: "817 déclarations de politiciens vérifiées par AFP Factuel, TF1 Info, Franceinfo, Le Monde…",
     expl: "Qui dit vrai ? Qui dit faux ? Classement des politiciens et partis par fiabilité avec biais des sources.",
     cta: "Voir les classements",
@@ -45,7 +45,7 @@ const BlocCard = ({ cfg, stats, onClick }) => {
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        flex: 1, minWidth: 280, cursor: "pointer", borderRadius: 16,
+        flex: 1, minWidth: 280, cursor: "pointer", borderRadius: 18,
         background: cfg.gradient,
         boxShadow: hover
           ? "0 12px 40px rgba(0,0,0,0.22)"
@@ -55,8 +55,10 @@ const BlocCard = ({ cfg, stats, onClick }) => {
         padding: "2.5rem 2rem",
         display: "flex", flexDirection: "column", gap: "1.2rem",
         color: "#fff",
+        position: "relative", overflow: "hidden",
       }}
     >
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "var(--pg-gold)" }} />
       <div style={{ fontSize: 48, lineHeight: 1 }}>{cfg.icon}</div>
       <div>
         <h2 style={{ margin: 0, fontSize: 26, fontWeight: 800 }}>{cfg.title}</h2>
@@ -88,9 +90,10 @@ const BlocCard = ({ cfg, stats, onClick }) => {
           {cfg.expl}
         </p>
         <span style={{
-          display: "inline-block", background: "rgba(255,255,255,0.25)",
-          borderRadius: 20, padding: "6px 16px", fontSize: 13, fontWeight: 700,
-          border: "1px solid rgba(255,255,255,0.4)",
+          display: "inline-flex", alignItems: "center", gap: 6,
+          background: "#fff", color: "#14213d",
+          borderRadius: 20, padding: "7px 15px", fontSize: 13, fontWeight: 800,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
         }}>
           {cfg.cta} →
         </span>

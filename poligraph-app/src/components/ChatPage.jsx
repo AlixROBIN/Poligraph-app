@@ -232,7 +232,7 @@ export default function ChatWidget() {
         <div className="chat-panel">
           <div className="chat-panel-header">
             <div className="chat-panel-title">
-              <span>🤖</span>
+              <span className="chat-header-avatar">🤖</span>
               <span>PoliBot</span>
               <span className="badge-agent">Agent IA</span>
             </div>

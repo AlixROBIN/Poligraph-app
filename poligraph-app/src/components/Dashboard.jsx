@@ -19,16 +19,31 @@ function toTime(obj) {
     .map(([name, value]) => ({ name, value }));
 }
 
-const Stat = ({ label, value, sub, onClick }) => (
-  <div style={{ ...statStyle, cursor: onClick ? "pointer" : "default" }}
-    onClick={onClick}
-    title={onClick ? "Cliquez pour explorer" : undefined}>
-    <div style={{ fontSize: 28, fontWeight: 700, color: "#1a3a6e" }}>{value}</div>
-    <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{label}</div>
-    {sub && <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{sub}</div>}
-    {onClick && <div style={{ fontSize: 10, color: "#1a3a6e", marginTop: 4, opacity: 0.6 }}>→ Explorer</div>}
-  </div>
-);
+const Stat = ({ icon, label, value, sub, onClick }) => {
+  const [hover, setHover] = useState(false);
+  return (
+    <div
+      style={{
+        ...statStyle,
+        cursor: onClick ? "pointer" : "default",
+        boxShadow: hover ? "0 6px 20px rgba(20,33,61,0.14)" : statStyle.boxShadow,
+        transform: hover ? "translateY(-2px)" : "translateY(0)",
+      }}
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title={onClick ? "Cliquez pour explorer" : undefined}>
+      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: "#c9a227" }} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <span style={{ fontSize: 15, opacity: 0.55 }}>{icon}</span>
+      </div>
+      <div style={{ fontSize: 26, fontWeight: 800, color: "#14213d" }}>{value}</div>
+      <div style={{ fontSize: 12.5, fontWeight: 600, marginTop: 2, color: "#5b6b85" }}>{label}</div>
+      {sub && <div style={{ fontSize: 11, color: "#8b93a7", marginTop: 2 }}>{sub}</div>}
+      {onClick && <div style={{ fontSize: 10, color: "#1a3a6e", marginTop: 4, opacity: 0.7, fontWeight: 700 }}>→ Explorer</div>}
+    </div>
+  );
+};
 
 const Card = ({ title, children }) => (
   <div style={cardStyle}>
@@ -170,19 +185,19 @@ const Dashboard = ({ onNavigate }) => {
       </div>
 
       {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
-        <Stat label="Scandales analysés" value={sc.total?.toLocaleString()}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
+        <Stat icon="⚖" label="Scandales analysés" value={sc.total?.toLocaleString()}
           onClick={() => go("exploration", { tab: "scandales" })} />
-        <Stat label="Votes parlementaires" value={vt.total?.toLocaleString()}
+        <Stat icon="🗳" label="Votes parlementaires" value={vt.total?.toLocaleString()}
           onClick={() => go("exploration", { tab: "votes" })} />
-        <Stat label="Taux d'adoption" value={`${txAdopt}%`} sub="des textes soumis au vote"
+        <Stat icon="📈" label="Taux d'adoption" value={`${txAdopt}%`} sub="des textes soumis au vote"
           onClick={() => go("exploration", { tab: "votes", result: "ADOPTED" })} />
-        <Stat label="Catégories de scandales" value={Object.keys(sc.par_categorie || {}).length}
+        <Stat icon="🏷" label="Catégories de scandales" value={Object.keys(sc.par_categorie || {}).length}
           onClick={() => go("exploration", { tab: "scandales" })} />
       </div>
 
       {/* Timelines */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "1rem", marginBottom: "1rem" }}>
         <Card title="Scandales par année — cliquez sur un point pour filtrer">
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={anneeScSc}>
@@ -217,7 +232,7 @@ const Dashboard = ({ onNavigate }) => {
       </div>
 
       {/* Partis + Catégories + Résultats */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1rem" }}>
         <Card title="Scandales par parti (top 8)">
           <p style={{ fontSize: 11, color: "#aaa", margin: "-0.5rem 0 0.75rem" }}>Cliquez sur un parti pour filtrer</p>
           <ResponsiveContainer width="100%" height={240}>
@@ -322,9 +337,10 @@ const Dashboard = ({ onNavigate }) => {
 };
 
 const statStyle = {
-  background: "#fff", borderRadius: 10, padding: "1.2rem",
-  boxShadow: "0 1px 4px rgba(0,0,0,0.08)", textAlign: "center",
-  transition: "box-shadow 0.15s, transform 0.1s",
+  background: "#fff", borderRadius: 10, padding: "1.2rem 1.2rem 1.2rem 1.4rem",
+  boxShadow: "0 1px 4px rgba(0,0,0,0.08)", textAlign: "left",
+  transition: "box-shadow 0.15s, transform 0.15s",
+  position: "relative", overflow: "hidden",
 };
 const cardStyle = {
   background: "#fff", borderRadius: 10, padding: "1.2rem",

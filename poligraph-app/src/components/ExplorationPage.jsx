@@ -14,6 +14,13 @@ const GLOSSARY = {
   categorie:  "La catégorie décrit le type d'infraction reprochée à l'élu (corruption, détournement de fonds, abus de biens sociaux…).",
 };
 
+const Field = ({ label, children }) => (
+  <div>
+    <label style={fieldLabelStyle}>{label}</label>
+    {children}
+  </div>
+);
+
 const Tip = ({ term }) => {
   const text = GLOSSARY[term];
   if (!text) return null;
@@ -134,7 +141,7 @@ const VoteDetail = ({ row, onClose }) => {
 
       {/* Barre de vote globale */}
       <div style={{ marginTop: 16 }}>
-        <div style={{ display: "flex", height: 22, borderRadius: 5, overflow: "hidden", gap: 2 }}>
+        <div style={{ display: "flex", height: 22, borderRadius: 999, overflow: "hidden", boxShadow: "inset 0 0 0 1px #dbe1ee" }}>
           {pctFor > 0 && (
             <div style={{ width: `${pctFor}%`, background: "#2ecc71", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <span style={{ fontSize: 11, color: "#fff", fontWeight: 700 }}>{pctFor > 5 ? `${pctFor}%` : ""}</span>
@@ -206,7 +213,7 @@ const VoteDetail = ({ row, onClose }) => {
                     </div>
 
                     {/* Barre stacked */}
-                    <div style={{ height: 18, borderRadius: 4, overflow: "hidden", display: "flex", background: "#f0f0f0" }}>
+                    <div style={{ height: 18, borderRadius: 999, overflow: "hidden", display: "flex", background: "#f0f0f0" }}>
                       {pFor > 0 && (
                         <div style={{ width: `${pFor}%`, background: "#2ecc71", display: "flex", alignItems: "center", justifyContent: "center" }}>
                           <span style={{ fontSize: 10, color: "#fff", fontWeight: 700 }}>{pFor > 8 ? `${pFor}%` : ""}</span>
@@ -300,23 +307,33 @@ const ScandalSearch = ({ filters, initial = {} }) => {
 
   return (
     <div>
-      <div style={filterRowStyle}>
-        <input style={inputStyle} placeholder="Recherche (titre, description, élu...)"
-          value={q} onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && search(0)} />
-        <select style={selectStyle} value={category} onChange={(e) => { setCat(e.target.value); search(0); }}>
-          <option value="">Toutes catégories</option>
-          {filters.categories?.map((c) => <option key={c}>{c}</option>)}
-        </select>
-        <select style={selectStyle} value={parti} onChange={(e) => { setParti(e.target.value); search(0); }}>
-          <option value="">Tous partis</option>
-          {filters.partis?.map((p) => <option key={p}>{p}</option>)}
-        </select>
-        <select style={selectStyle} value={statut} onChange={(e) => { setStatut(e.target.value); search(0); }}>
-          <option value="">Tous statuts</option>
-          {filters.statuts?.map((s) => <option key={s}>{s}</option>)}
-        </select>
-        <button style={btnStyle} onClick={() => search(0)}>Rechercher</button>
+      <div style={filterToolbarStyle}>
+        <div style={filterGridStyle}>
+          <Field label="Recherche">
+            <input style={inputStyle} placeholder="Titre, description, élu..."
+              value={q} onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && search(0)} />
+          </Field>
+          <Field label="Catégorie">
+            <select style={selectStyle} value={category} onChange={(e) => { setCat(e.target.value); search(0); }}>
+              <option value="">Toutes catégories</option>
+              {filters.categories?.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </Field>
+          <Field label="Parti">
+            <select style={selectStyle} value={parti} onChange={(e) => { setParti(e.target.value); search(0); }}>
+              <option value="">Tous partis</option>
+              {filters.partis?.map((p) => <option key={p}>{p}</option>)}
+            </select>
+          </Field>
+          <Field label="Statut">
+            <select style={selectStyle} value={statut} onChange={(e) => { setStatut(e.target.value); search(0); }}>
+              <option value="">Tous statuts</option>
+              {filters.statuts?.map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </Field>
+          <button style={btnStyle} onClick={() => search(0)}>Rechercher</button>
+        </div>
       </div>
 
       {loading && <p style={{ color: "#888" }}>Chargement...</p>}
@@ -420,17 +437,25 @@ const VoteSearch = ({ filters, initial = {} }) => {
           </span>
         </div>
       )}
-      <div style={filterRowStyle}>
-        <input style={inputStyle} placeholder="Recherche dans le titre du vote..."
-          value={q} onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && search(0)} />
-        <select style={selectStyle} value={result_} onChange={(e) => { setRes(e.target.value); search(0); }}>
-          <option value="">Tous résultats</option>
-          {filters.resultats?.map((r) => <option key={r}>{r}</option>)}
-        </select>
-        <input style={{ ...selectStyle, width: 90 }} type="number" placeholder="Année"
-          value={annee || ""} onChange={(e) => setAnnee(Number(e.target.value))} />
-        <button style={btnStyle} onClick={() => search(0)}>Rechercher</button>
+      <div style={filterToolbarStyle}>
+        <div style={filterGridStyle}>
+          <Field label="Recherche">
+            <input style={inputStyle} placeholder="Titre du vote..."
+              value={q} onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && search(0)} />
+          </Field>
+          <Field label="Résultat">
+            <select style={selectStyle} value={result_} onChange={(e) => { setRes(e.target.value); search(0); }}>
+              <option value="">Tous résultats</option>
+              {filters.resultats?.map((r) => <option key={r}>{r}</option>)}
+            </select>
+          </Field>
+          <Field label="Année">
+            <input style={selectStyle} type="number" placeholder="ex: 2022"
+              value={annee || ""} onChange={(e) => setAnnee(Number(e.target.value))} />
+          </Field>
+          <button style={btnStyle} onClick={() => search(0)}>Rechercher</button>
+        </div>
       </div>
 
       {loading && <p style={{ color: "#888" }}>Chargement...</p>}
@@ -734,10 +759,21 @@ const closeBtnStyle = {
   fontSize: 20, color: "#aaa", lineHeight: 1, flexShrink: 0,
   padding: "0 4px",
 };
-const filterRowStyle = { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 };
-const inputStyle  = { padding: "7px 12px", borderRadius: 6, border: "1px solid #d4ddf7", fontSize: 13, flex: 1, minWidth: 200 };
-const selectStyle = { padding: "7px 10px", borderRadius: 6, border: "1px solid #d4ddf7", fontSize: 13 };
-const btnStyle    = { padding: "7px 16px", background: "#1a3a6e", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: 13 };
+const filterToolbarStyle = {
+  background: "#fff", border: "1px solid #dbe1ee", borderRadius: "0 12px 12px 12px",
+  boxShadow: "0 1px 3px rgba(20,33,61,0.08)", padding: "14px 16px", marginBottom: 16,
+};
+const filterGridStyle = {
+  display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+  gap: 12, alignItems: "end",
+};
+const fieldLabelStyle = {
+  display: "block", fontSize: 10.5, fontWeight: 700, textTransform: "uppercase",
+  letterSpacing: "0.04em", color: "#5b6b85", marginBottom: 5,
+};
+const inputStyle  = { width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #dbe1ee", fontSize: 13, background: "#eef1f6" };
+const selectStyle = { width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #dbe1ee", fontSize: 13, background: "#eef1f6" };
+const btnStyle    = { padding: "9px 18px", background: "#1a3a6e", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13 };
 const tabBtn      = { padding: "7px 20px", border: "none", borderRadius: "6px 6px 0 0", cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.15s" };
 const tableStyle  = { width: "100%", borderCollapse: "collapse", fontSize: 13 };
 const thStyle     = { textAlign: "left", padding: "9px 10px", background: "#f0f3fa", fontWeight: 700, color: "#1a3a6e", borderBottom: "2px solid #d4ddf7", letterSpacing: "0.02em", fontSize: 12 };

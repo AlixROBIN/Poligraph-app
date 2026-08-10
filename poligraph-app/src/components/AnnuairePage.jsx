@@ -150,10 +150,11 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
         {profile.photoUrl
           ? <img src={profile.photoUrl} alt={profile.fullName}
               style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover",
-                border: `3px solid ${partyColor}` }} />
+                border: `3px solid ${partyColor}`, boxShadow: "0 0 0 3px rgba(201,162,39,0.22)" }} />
           : <div style={{ width: 72, height: 72, borderRadius: "50%",
               background: partyColor + "22", display: "flex", alignItems: "center",
-              justifyContent: "center", fontSize: 28, color: partyColor, fontWeight: 700 }}>
+              justifyContent: "center", fontSize: 28, color: partyColor, fontWeight: 700,
+              border: `3px solid ${partyColor}`, boxShadow: "0 0 0 3px rgba(201,162,39,0.22)" }}>
               {profile.fullName?.[0]}
             </div>
         }
@@ -215,7 +216,10 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
                   </tr></thead>
                   <tbody>
                     {profile.mandates.map((m, i) => (
-                      <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#f9faff" }}>
+                      <tr key={i}
+                        style={{ background: i % 2 === 0 ? "#fff" : "#f9faff" }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = "#eef2ff"}
+                        onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? "#fff" : "#f9faff"}>
                         <td style={td}><span style={badge("#e8eeff","#1a3a6e")}>{m.type}</span></td>
                         <td style={td}>{m.title}</td>
                         <td style={td}>{m.institution}</td>

@@ -1,3 +1,27 @@
+:root {
+  /* Identité PoliGraph — palette, rayons et ombres partagés */
+  --pg-navy: #1a3a6e;
+  --pg-navy-soft: #2c5282;
+  --pg-navy-deep: #0f2549;
+  --pg-gold: #c9a227;
+  --pg-ink: #14213d;
+  --pg-muted: #5b6b85;
+  --pg-line: #dbe1ee;
+  --pg-bg: #eef1f6;
+  --pg-surface: #ffffff;
+  --pg-success: #2ecc71;
+  --pg-danger: #e74c3c;
+  --pg-warning: #f39c12;
+
+  --pg-r-sm: 8px;
+  --pg-r-md: 12px;
+  --pg-r-lg: 18px;
+
+  --pg-sh-sm: 0 1px 3px rgba(20, 33, 61, 0.08);
+  --pg-sh-md: 0 6px 20px rgba(20, 33, 61, 0.10);
+  --pg-sh-lg: 0 18px 44px rgba(20, 33, 61, 0.18);
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
