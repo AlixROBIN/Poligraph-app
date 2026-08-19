@@ -45,7 +45,7 @@ function App() {
         {page === "match"               && <MatchPage />}
         {page === "exploration"         && <ExplorationPage key={JSON.stringify(explorationFilters)} initialFilters={explorationFilters} />}
         {page === "journal"    && <JournalPage />}
-        {page === "annuaire"   && <AnnuairePage onNavigate={navigate} />}
+        {page === "annuaire"   && <AnnuairePage key={explorationFilters?.slug || "annuaire"} onNavigate={navigate} initialSlug={explorationFilters?.slug} />}
       </main>
       <PageWave />
       <ChatWidget />

@@ -81,6 +81,31 @@ export function fetchPartis() {
   return _partisPromise;
 }
 
+export async function fetchPartyMembers(slug, limit = 6) {
+  const res = await fetch(`${BASE_URL}/proxy/partis/${slug}/membres?limit=${limit}`);
+  if (!res.ok) throw new Error("Party members error");
+  const json = await res.json();
+  return json.data || [];
+}
+
+export async function fetchBio(slug) {
+  // Génération IA potentiellement lente/indisponible (Ollama) — on abandonne
+  // vite plutôt que de laisser des requêtes s'accumuler, la bio est un bonus
+  // best-effort au survol, jamais bloquant pour le reste de la page.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(`${BASE_URL}/proxy/politiques/${slug}/bio`, { signal: controller.signal });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.bio || null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function sendChat({ message, history = [] }) {
   const res = await fetch(`${BASE_URL}/chat`, {
     method: "POST",

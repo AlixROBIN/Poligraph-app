@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import PartyLogo from "./PartyLogo";
 import Badge from "./Badge";
 import Card from "./Card";
+import { fetchBio } from "../data/api";
 
 const BASE_URL = (process.env.REACT_APP_API_URL || "http://localhost:8000") + "/api/proxy";
 
@@ -466,6 +467,24 @@ const PoliticianList = ({ onSelect }) => {
   const [data,   setData]   = useState(null);
   const [page,   setPage]   = useState(1);
   const [loading, setLoad]  = useState(false);
+  const [bios,   setBios]   = useState({});
+
+  // Descriptif rapide chargé au survol seulement (pas pour toute la page
+  // d'un coup) — évite de déclencher 24 générations IA simultanées.
+  const bioCache = useRef({});
+  const bioTimer = useRef(null);
+  const hoverBio = (slug) => {
+    if (bioCache.current[slug] !== undefined) return;
+    clearTimeout(bioTimer.current);
+    bioTimer.current = setTimeout(() => {
+      if (bioCache.current[slug] !== undefined) return;
+      bioCache.current[slug] = null;
+      fetchBio(slug).then((bio) => {
+        bioCache.current[slug] = bio;
+        if (bio) setBios((prev) => ({ ...prev, [slug]: bio }));
+      }).catch(() => {});
+    }, 220);
+  };
 
   const search = useCallback(async (p = 1) => {
     setLoad(true);
@@ -511,7 +530,7 @@ const PoliticianList = ({ onSelect }) => {
               borderBottom: i < data.data.length - 1 ? "1px solid var(--pg-line)" : "none",
               transition: "background 0.12s",
             }}
-            onMouseEnter={(e) => e.currentTarget.style.background = "var(--color-gray-50)"}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-gray-50)"; hoverBio(p.slug); }}
             onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
             {p.photoUrl
               ? <img src={p.photoUrl} alt="" style={{ width:32,height:32,borderRadius:"50%",objectFit:"cover",flexShrink:0 }}/>
@@ -519,7 +538,17 @@ const PoliticianList = ({ onSelect }) => {
                   display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
                   fontSize:13,color:"var(--color-blue-800)",fontWeight:500 }}>{p.fullName?.[0]}</div>
             }
-            <span style={{ fontWeight: 500, fontSize: 13.5, color: "var(--pg-ink)", flex: 1 }}>{p.fullName}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ fontWeight: 500, fontSize: 13.5, color: "var(--pg-ink)" }}>{p.fullName}</span>
+              {bios[p.slug] && (
+                <div style={{
+                  fontSize: 11, color: "var(--pg-muted)", marginTop: 2, lineHeight: 1.4,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {bios[p.slug]}
+                </div>
+              )}
+            </div>
             <PartyBadge party={p.currentParty} />
             <span style={{ color: "var(--pg-muted)", fontSize: 13 }}>›</span>
           </div>
@@ -534,8 +563,8 @@ const PoliticianList = ({ onSelect }) => {
 // ============================================================
 // Page principale
 // ============================================================
-const AnnuairePage = ({ onNavigate }) => {
-  const [selectedSlug, setSelectedSlug] = useState(null);
+const AnnuairePage = ({ onNavigate, initialSlug }) => {
+  const [selectedSlug, setSelectedSlug] = useState(initialSlug || null);
 
   return (
     <div style={{ padding:"1.5rem" }}>

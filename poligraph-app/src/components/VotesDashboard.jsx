@@ -1,17 +1,7 @@
 import { useState, useEffect } from "react";
-import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-} from "recharts";
 import { fetchDashboardVotes } from "../data/api";
 
 const BASE = (process.env.REACT_APP_API_URL || "http://localhost:8000") + "/api";
-
-
-function toTime(obj) {
-  return Object.entries(obj || {})
-    .sort((a, b) => Number(a[0]) - Number(b[0]))
-    .map(([name, value]) => ({ name, value }));
-}
 
 const Card = ({ title, subtitle, children, accent }) => (
   <div style={{
@@ -25,17 +15,6 @@ const Card = ({ title, subtitle, children, accent }) => (
   </div>
 );
 
-
-
-const VtTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{ background: "#1a2e5a", color: "#fff", padding: "8px 12px", borderRadius: 8, fontSize: 12 }}>
-      <div style={{ fontWeight: 700 }}>{label}</div>
-      <div>{payload[0].value?.toLocaleString()} scrutins</div>
-    </div>
-  );
-};
 
 // ─── Matrice parti × thème (source unique) ──────────────────────────────────
 // Un élu représentatif par parti → 100 votes récents → classification thématique.
@@ -104,8 +83,6 @@ export default function VotesDashboard({ onNavigate }) {
   if (err)  return <p style={{ color: "red", padding: "2rem" }}>Erreur : {err}</p>;
   if (!data) return <p style={{ padding: "2rem" }}>Chargement…</p>;
 
-  const timeline = toTime(data.par_annee);
-
   const themes    = Object.entries(data.par_theme || {})
     .sort((a, b) => b[1].total - a[1].total)
     .map(([name, d]) => ({ name, ...d }));
@@ -138,33 +115,6 @@ export default function VotesDashboard({ onNavigate }) {
             Explorer les votes →
           </button>
         </div>
-      </div>
-
-      {/* Timeline */}
-      <div style={{ marginBottom: "1.5rem" }}>
-        <Card title="Évolution des scrutins par année"
-          subtitle="Cliquez sur un point pour voir tous les votes de cette année">
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={timeline} margin={{ top: 10, right: 20, bottom: 0, left: 0 }}>
-              <defs>
-                <linearGradient id="vtGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#1a3a6e" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#1a3a6e" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip content={<VtTooltip />} />
-              <Area type="monotone" dataKey="value" stroke="#1a3a6e" strokeWidth={2.5}
-                fill="url(#vtGrad)" dot={{ r: 3, fill: "#1a3a6e" }}
-                activeDot={{
-                  r: 7, fill: "#c9a227", cursor: "pointer",
-                  onClick: (_, p) => go({ annee: Number(p.payload.name) }),
-                }} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </Card>
       </div>
 
       {/* Thèmes */}

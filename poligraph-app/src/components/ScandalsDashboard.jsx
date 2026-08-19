@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, Cell, PieChart, Pie, LabelList,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  Cell, PieChart, Pie, LabelList,
 } from "recharts";
 import { fetchDashboardScandales } from "../data/api";
 import Hemicycle from "./Hemicycle";
@@ -64,12 +64,6 @@ function toChart(obj, limit = 15) {
     .map(([name, value]) => ({ name, value }));
 }
 
-function toTime(obj) {
-  return Object.entries(obj || {})
-    .sort((a, b) => Number(a[0]) - Number(b[0]))
-    .map(([name, value]) => ({ name, value }));
-}
-
 const ScTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -92,7 +86,6 @@ export default function ScandalsDashboard({ onNavigate }) {
   if (err)  return <p style={{ color: "var(--color-red-600)", padding: "2rem" }}>Erreur : {err}</p>;
   if (!data) return <p style={{ padding: "2rem", color: "var(--pg-muted)" }}>Chargement…</p>;
 
-  const timeline   = toTime(data.par_annee);
   const topPartis  = toChart(data.par_parti, 12);
   const topCats    = toChart(data.par_categorie, 10);
   const statuts    = toChart(data.par_statut);
@@ -142,33 +135,6 @@ export default function ScandalsDashboard({ onNavigate }) {
       {/* Hémicycle — Assemblée nationale actuelle par parti (données réelles) */}
       <div style={{ marginBottom: "1.5rem" }}>
         <Hemicycle onNavigate={onNavigate} />
-      </div>
-
-      {/* Timeline pleine largeur */}
-      <div style={{ marginBottom: "1.5rem" }}>
-        <Card title="Évolution des affaires par année"
-          subtitle="Cliquez sur un point pour filtrer par année dans l'Exploration">
-          <ResponsiveContainer width="100%" height={240}>
-            <AreaChart data={timeline} margin={{ top: 10, right: 20, bottom: 0, left: 0 }}>
-              <defs>
-                <linearGradient id="scGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#c4503e" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#c4503e" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e0" />
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#71716a" }} axisLine={{ stroke: "#e5e5e0" }} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: "#71716a" }} axisLine={{ stroke: "#e5e5e0" }} tickLine={false} />
-              <Tooltip content={<ScTooltip />} />
-              <Area type="monotone" dataKey="value" stroke="#c4503e" strokeWidth={2}
-                fill="url(#scGrad)" dot={{ r: 2.5, fill: "#c4503e" }}
-                activeDot={{
-                  r: 6, fill: "#b9832a", cursor: "pointer",
-                  onClick: (_, p) => go({ annee: Number(p.payload.name) }),
-                }} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </Card>
       </div>
 
       {/* Partis + Catégories */}
