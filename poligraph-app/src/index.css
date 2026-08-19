@@ -49,7 +49,7 @@
   --color-purple-900: #3b294a;
 
   /* ============================================================
-     Tokens produit — identité PoliGraph, dérivés de la palette
+     Tokens produit — identité MonAppPolitique, dérivés de la palette
      ci-dessus. Bleu marine allégé, or remplacé par un ambre doux.
      ============================================================ */
   --pg-navy:      #26436d;
@@ -99,9 +99,21 @@ html, body, #root {
 body {
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   font-weight: 400;
-  background: var(--pg-bg);
   color: var(--pg-ink);
   overflow-x: hidden;
+  /* Nuages dégradés ancrés au viewport (visibles sur toute page, à tout
+     défilement) — mêmes teintes que les pastilles des cartes (rouge
+     scandales, or accent, violet fact-checking, bleu votes), jamais de
+     couleur inventée pour l'occasion. */
+  background:
+    radial-gradient(620px 460px at 0% 0%,     color-mix(in srgb, var(--color-red-400) 38%, transparent), transparent 68%),
+    radial-gradient(560px 420px at 100% 0%,   color-mix(in srgb, var(--pg-gold) 34%, transparent), transparent 68%),
+    radial-gradient(600px 460px at 100% 100%, color-mix(in srgb, var(--color-purple-400) 32%, transparent), transparent 68%),
+    radial-gradient(640px 480px at 0% 100%,   color-mix(in srgb, var(--color-blue-400) 34%, transparent), transparent 68%),
+    radial-gradient(700px 520px at 50% 50%,   color-mix(in srgb, var(--color-blue-400) 10%, transparent), transparent 72%),
+    var(--pg-bg);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
 }
 h1, h2, h3, h4 {
   font-weight: 500;

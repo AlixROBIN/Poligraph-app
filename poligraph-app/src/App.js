@@ -9,6 +9,7 @@ import ExplorationPage from "./components/ExplorationPage";
 import AnnuairePage from "./components/AnnuairePage";
 import JournalPage from "./components/JournalPage";
 import ChatWidget from "./components/ChatPage";
+import PageWave from "./components/PageWave";
 import "./styles/global.css";
 
 function App() {
@@ -46,6 +47,7 @@ function App() {
         {page === "journal"    && <JournalPage />}
         {page === "annuaire"   && <AnnuairePage onNavigate={navigate} />}
       </main>
+      <PageWave />
       <ChatWidget />
     </div>
   );

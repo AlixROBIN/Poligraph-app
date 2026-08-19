@@ -1,5 +1,5 @@
 # ============================================================
-# deploy.ps1 — Deploiement Kubernetes complet de PoliGraph
+# deploy.ps1 — Deploiement Kubernetes complet de MonAppPolitique
 # Usage : .\k8s\deploy.ps1
 #         .\k8s\deploy.ps1 -SkipBuild    (reutilise les images)
 #         .\k8s\deploy.ps1 -Teardown     (supprime tout)
@@ -134,7 +134,7 @@ Write-OK "Spark deploye (telechargement modele au 1er demarrage ~2 min)"
 # ── Résumé ────────────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Green
-Write-Host " PoliGraph deploye avec succes !" -ForegroundColor Green
+Write-Host " MonAppPolitique deploye avec succes !" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Frontend  -> http://localhost:30300"

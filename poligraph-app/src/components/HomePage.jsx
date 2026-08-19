@@ -106,7 +106,7 @@ export default function HomePage({ onNavigate }) {
   }, []);
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--pg-bg)" }}>
+    <div style={{ minHeight: "100vh", background: "transparent" }}>
       {/* Hero */}
       <div style={{
         background: "linear-gradient(135deg, var(--pg-navy-deep) 0%, var(--pg-navy) 60%, var(--pg-navy-soft) 100%)",
@@ -122,7 +122,7 @@ export default function HomePage({ onNavigate }) {
             Transparence politique française
           </div>
           <h1 style={{ margin: 0, fontSize: "clamp(26px, 4.5vw, 42px)", fontWeight: 600, letterSpacing: "-0.5px" }}>
-            Poli<span style={{ color: "var(--pg-gold)" }}>Graph</span>
+            MonApp<span style={{ color: "var(--pg-gold)" }}>Politique</span>
           </h1>
           <p style={{ fontSize: 15, opacity: 0.75, marginTop: "0.8rem", lineHeight: 1.7, maxWidth: 480, margin: "0.8rem auto 0" }}>
             Explorez les scandales, les votes et les relations des élus français.

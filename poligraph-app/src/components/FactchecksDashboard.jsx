@@ -630,7 +630,7 @@ export default function FactchecksDashboard({ onNavigate }) {
   const total = data.total || 0;
 
   return (
-    <div style={{ padding: "1.5rem", background: "#f5f6fa", minHeight: "100vh" }}>
+    <div style={{ padding: "1.5rem", background: "transparent", minHeight: "100vh" }}>
 
       {/* Modals */}
       {selectedPol && !selectedFc && (

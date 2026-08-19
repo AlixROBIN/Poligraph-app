@@ -164,7 +164,7 @@ def extract_keywords(text: str) -> List[str]:
 def build_spark() -> SparkSession:
     return (
         SparkSession.builder
-        .appName("PoliGraph-Streaming")
+        .appName("MonAppPolitique-Streaming")
         .config("spark.sql.streaming.checkpointLocation", CHECKPOINT_DIR)
         .config("spark.sql.ansi.enabled", "false")
         .config("spark.ui.showConsoleProgress", "false")

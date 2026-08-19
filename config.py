@@ -1,5 +1,5 @@
 """
-Configuration centralisée du projet PoliGraph Data Analysis
+Configuration centralisée du projet MonAppPolitique Data Analysis
 """
 
 from pathlib import Path

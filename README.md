@@ -1,4 +1,4 @@
-# PoliGraph Data Analysis
+# MonAppPolitique Data Analysis
 
 Interface interactive pour analyser les données politiques de l'API PoliGraph.
 

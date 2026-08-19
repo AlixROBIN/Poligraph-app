@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import candidatsData from "../data/candidats.json";
+
+const DRAG_THRESHOLD = 90;
 
 const CANDIDATS = candidatsData.candidats;
 const PROPOSITIONS = candidatsData.quiz.map(q => ({
@@ -14,12 +16,17 @@ export default function MatchPage() {
   const [done,       setDone]       = useState(false);
   const [animDir,    setAnimDir]    = useState(null);
   const [showDetail, setShowDetail] = useState(false);
+  const [dragX,      setDragX]      = useState(0);
+  const [dragging,   setDragging]   = useState(false);
+  const dragStartX = useRef(0);
 
   const total = PROPOSITIONS.length;
   const current = PROPOSITIONS[idx];
 
   const vote = (dir) => {
     if (animDir) return;
+    setDragging(false);
+    setDragX(0);
     setAnimDir(dir);
     setShowDetail(false);
     setTimeout(() => {
@@ -32,6 +39,25 @@ export default function MatchPage() {
       }
       setAnimDir(null);
     }, 280);
+  };
+
+  // Glisser la carte à la souris/au doigt — comme les boutons, mais au geste.
+  const onDragStart = (e) => {
+    if (animDir) return;
+    dragStartX.current = e.clientX;
+    setDragging(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onDragMove = (e) => {
+    if (!dragging) return;
+    setDragX(e.clientX - dragStartX.current);
+  };
+  const onDragEnd = () => {
+    if (!dragging) return;
+    setDragging(false);
+    if (dragX > DRAG_THRESHOLD) vote("pour");
+    else if (dragX < -DRAG_THRESHOLD) vote("contre");
+    else setDragX(0);
   };
 
   const computeScores = () => {
@@ -72,7 +98,7 @@ export default function MatchPage() {
     const ranked = computeScores();
     const best = ranked[0];
     return (
-      <div style={{ padding: "1.5rem", background: "#f5f6fa", minHeight: "100vh" }}>
+      <div style={{ padding: "1.5rem", background: "transparent", minHeight: "100vh" }}>
         <Header />
         <div style={{ maxWidth: 560, margin: "0 auto", padding: "1rem 0" }}>
           <div style={{ background: "#fff", borderRadius: 20, padding: "2rem", boxShadow: "0 4px 24px rgba(0,0,0,0.10)", border: "1px solid #e8ecf8", textAlign: "center", marginBottom: "1.4rem" }}>
@@ -115,17 +141,26 @@ export default function MatchPage() {
     );
   }
 
-  const cardStyle = {
-    transform: animDir === "pour" ? "translateX(120%) rotate(15deg)"
-             : animDir === "contre" ? "translateX(-120%) rotate(-15deg)"
-             : animDir === "neutre" ? "translateY(-80px) scale(0.9) opacity(0)"
-             : "none",
-    transition: animDir ? "transform 0.28s ease, opacity 0.28s ease" : "none",
-    opacity: animDir ? 0 : 1,
-  };
+  const cardStyle = dragging
+    ? {
+        transform: `translateX(${dragX}px) rotate(${dragX / 18}deg)`,
+        transition: "none",
+        opacity: 1,
+      }
+    : {
+        transform: animDir === "pour" ? "translateX(120%) rotate(15deg)"
+                 : animDir === "contre" ? "translateX(-120%) rotate(-15deg)"
+                 : animDir === "neutre" ? "translateY(-80px) scale(0.9) opacity(0)"
+                 : "none",
+        transition: animDir ? "transform 0.28s ease, opacity 0.28s ease" : "transform 0.25s ease",
+        opacity: animDir ? 0 : 1,
+      };
+
+  // Intensité du "tampon" Pour/Contre qui apparaît pendant le glisser
+  const stampOpacity = Math.min(Math.abs(dragX) / DRAG_THRESHOLD, 1);
 
   return (
-    <div style={{ padding: "1.5rem", background: "var(--pg-bg)", minHeight: "100vh" }}>
+    <div style={{ padding: "1.5rem", background: "transparent", minHeight: "100vh" }}>
       <Header />
       <div style={{ maxWidth: 480, margin: "0 auto", padding: "1rem 0" }}>
         {/* Progress */}
@@ -139,8 +174,35 @@ export default function MatchPage() {
           </div>
         </div>
 
-        {/* Card */}
-        <div style={{ ...cardStyle, background: "var(--pg-surface)", borderRadius: "var(--pg-r-lg)", padding: "2.25rem 2rem", boxShadow: "var(--pg-sh-sm)", border: "1px solid var(--pg-line)", minHeight: 200, display: "flex", flexDirection: "column", justifyContent: "center", textAlign: "center", marginBottom: "1.5rem" }}>
+        {/* Card — cliquable aux boutons ou glissable à la souris/au doigt */}
+        <div
+          onPointerDown={onDragStart}
+          onPointerMove={onDragMove}
+          onPointerUp={onDragEnd}
+          onPointerCancel={onDragEnd}
+          style={{
+            ...cardStyle, position: "relative", background: "var(--pg-surface)", borderRadius: "var(--pg-r-lg)",
+            padding: "2.25rem 2rem", boxShadow: dragging ? "var(--pg-sh-md)" : "var(--pg-sh-sm)",
+            border: "1px solid var(--pg-line)", minHeight: 200, display: "flex", flexDirection: "column",
+            justifyContent: "center", textAlign: "center", marginBottom: "1.5rem",
+            cursor: dragging ? "grabbing" : "grab", touchAction: "pan-y", userSelect: "none",
+          }}>
+          <span style={{
+            position: "absolute", top: 16, left: 18, padding: "3px 10px", borderRadius: 999,
+            border: "2px solid var(--color-red-600)", color: "var(--color-red-600)",
+            fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em",
+            transform: `rotate(-12deg) scale(${0.85 + stampOpacity * 0.15})`,
+            opacity: dragX < 0 ? stampOpacity : 0, transition: dragging ? "none" : "opacity 0.15s",
+            pointerEvents: "none",
+          }}>Contre</span>
+          <span style={{
+            position: "absolute", top: 16, right: 18, padding: "3px 10px", borderRadius: 999,
+            border: "2px solid var(--color-green-600)", color: "var(--color-green-600)",
+            fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em",
+            transform: `rotate(12deg) scale(${0.85 + stampOpacity * 0.15})`,
+            opacity: dragX > 0 ? stampOpacity : 0, transition: dragging ? "none" : "opacity 0.15s",
+            pointerEvents: "none",
+          }}>Pour</span>
           <div style={{ fontSize: 38, marginBottom: 12 }}>{current.emoji}</div>
           <div style={{ fontSize: 11, fontWeight: 500, color: "var(--pg-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>{current.topic}</div>
           <div style={{ fontSize: 17, fontWeight: 500, color: "var(--pg-ink)", lineHeight: 1.55, letterSpacing: "-0.2px" }}>
@@ -194,7 +256,10 @@ export default function MatchPage() {
           </button>
         </div>
 
-        <p style={{ textAlign: "center", fontSize: 11, color: "#bbb", marginTop: "1.2rem" }}>
+        <p style={{ textAlign: "center", fontSize: 11, color: "var(--pg-muted)", marginTop: "1.2rem" }}>
+          👆 Glissez la carte à gauche ou à droite, ou utilisez les boutons
+        </p>
+        <p style={{ textAlign: "center", fontSize: 11, color: "#bbb", marginTop: "0.3rem" }}>
           Positions basées sur les programmes publics des partis — à titre indicatif
         </p>
       </div>

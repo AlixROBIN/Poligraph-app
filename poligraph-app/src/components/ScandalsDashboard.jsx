@@ -110,7 +110,7 @@ export default function ScandalsDashboard({ onNavigate }) {
   };
 
   return (
-    <div style={{ padding: "1.5rem", background: "var(--pg-bg)", minHeight: "100vh" }}>
+    <div style={{ padding: "1.5rem", background: "transparent", minHeight: "100vh" }}>
       {/* Header */}
       <Card style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: "1.5rem" }}>
         <div style={{

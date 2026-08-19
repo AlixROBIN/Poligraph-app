@@ -46,7 +46,7 @@ REDDIT_FEEDS = [
     ("reddit/r/politique", "https://www.reddit.com/r/politique/hot/.rss?limit=25"),
 ]
 
-_UA = "PoliGraph/1.0 (https://github.com/poligraph; data engineering portfolio)"
+_UA = "MonAppPolitique/1.0 (https://github.com/poligraph; data engineering portfolio)"
 
 
 def article_id(url: str) -> str:

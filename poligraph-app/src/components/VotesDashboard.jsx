@@ -115,7 +115,7 @@ export default function VotesDashboard({ onNavigate }) {
   const go = (filters) => onNavigate("exploration", { tab: "votes", ...filters });
 
   return (
-    <div style={{ padding: "1.5rem", background: "#f5f6fa", minHeight: "100vh" }}>
+    <div style={{ padding: "1.5rem", background: "transparent", minHeight: "100vh" }}>
 
       {/* Header */}
       <div style={{

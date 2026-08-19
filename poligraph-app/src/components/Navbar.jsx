@@ -37,7 +37,7 @@ const Navbar = ({ currentPage, onPageChange, canGoBack, onBack }) => (
         </button>
       )}
       <h1 style={{ cursor: "pointer" }} onClick={() => onPageChange("accueil")}>
-        Poli<span>Graph</span>
+        MonApp<span>Politique</span>
       </h1>
     </div>
     <div className="nav-links">

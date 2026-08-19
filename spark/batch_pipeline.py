@@ -53,7 +53,7 @@ SPARK_MASTER = os.getenv("SPARK_MASTER", "local[*]")
 def get_spark() -> SparkSession:
     return (
         SparkSession.builder
-        .appName("PoliGraph-Batch")
+        .appName("MonAppPolitique-Batch")
         .master(SPARK_MASTER)
         .config("spark.sql.adaptive.enabled", "true")
         .config("spark.sql.shuffle.partitions", "8")
