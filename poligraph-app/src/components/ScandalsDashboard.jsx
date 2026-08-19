@@ -5,12 +5,16 @@ import {
 } from "recharts";
 import { fetchDashboardScandales } from "../data/api";
 import Hemicycle from "./Hemicycle";
+import Card from "./Card";
+import MetricCard from "./MetricCard";
+import { useParties } from "./PartyLogo";
 
-const COLORS = [
-  "#c0392b", "#e74c3c", "#e67e22", "#f39c12", "#1a3a6e",
-  "#2980b9", "#8e44ad", "#16a085", "#27ae60", "#2c3e50",
-  "#d35400", "#7f8c8d",
-];
+// Palette catégorique neutre (pas de partis) — nuances -400 de la palette
+// sémantique, désaturées, cycle sur 6 teintes.
+// Recharts pose ces valeurs en attribut SVG "fill" brut, qui ne résout pas
+// toujours var(--...) de façon fiable selon le moteur de rendu — on garde
+// donc du hex littéral ici (identique aux tokens CSS), var() partout ailleurs.
+const CAT_COLORS = ["#6e93c9", "#de7e70", "#d9a64e", "#7fae7f", "#a98bc2", "#a6a69e"];
 
 // Normalize: remove accents, uppercase, collapse separators → "CONDAMNE", "MISEENEXAMEN"…
 function norm(s) {
@@ -18,19 +22,31 @@ function norm(s) {
 }
 
 const STATUT_COLOR_MAP = [
-  { key: "CONDAMN",      color: "#c0392b" },
-  { key: "MISEENEXAMEN", color: "#e74c3c" },
-  { key: "ENCOURSDINST", color: "#e67e22" },
-  { key: "ENCOURS",      color: "#f39c12" },
-  { key: "ENQUETE",      color: "#f39c12" },
-  { key: "PRESCRIT",     color: "#95a5a6" },
-  { key: "ACQUITT",      color: "#27ae60" },
-  { key: "NONLIEU",      color: "#7f8c8d" },
+  { key: "CONDAMN",      color: "#c4503e" },
+  { key: "MISEENEXAMEN", color: "#de7e70" },
+  { key: "ENCOURSDINST", color: "#b9832a" },
+  { key: "ENCOURS",      color: "#d9a64e" },
+  { key: "ENQUETE",      color: "#d9a64e" },
+  { key: "PRESCRIT",     color: "#a6a69e" },
+  { key: "ACQUITT",      color: "#4f8350" },
+  { key: "NONLIEU",      color: "#71716a" },
 ];
 
 function statutColor(name) {
   const n = norm(name);
-  return STATUT_COLOR_MAP.find(({ key }) => n.includes(key))?.color || "#1a3a6e";
+  return STATUT_COLOR_MAP.find(({ key }) => n.includes(key))?.color || "#3d6098";
+}
+
+// Désature une couleur officielle de parti vers le gris neutre (--color-gray-400
+// = #a6a69e) en RGB pur — pas de color-mix()/var() ici, peu fiable en attribut
+// SVG "fill" selon le moteur de rendu.
+function desaturateHex(hex, ratio = 0.7) {
+  const h = (hex || "").replace("#", "");
+  if (h.length !== 6) return "#a6a69e";
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  const [gr, gg, gb] = [166, 166, 158];
+  const mix = (c, gc) => Math.round(c * ratio + gc * (1 - ratio));
+  return `rgb(${mix(r, gr)}, ${mix(g, gg)}, ${mix(b, gb)})`;
 }
 
 // Sum statut values whose normalized key includes a keyword
@@ -54,34 +70,11 @@ function toTime(obj) {
     .map(([name, value]) => ({ name, value }));
 }
 
-const Card = ({ title, subtitle, children }) => (
-  <div style={{
-    background: "#fff", borderRadius: 12, padding: "1.4rem",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.07)", border: "1px solid #e8ecf8",
-  }}>
-    <h3 style={{ margin: "0 0 0.25rem", fontSize: 15, color: "#1a2e5a" }}>{title}</h3>
-    {subtitle && <p style={{ margin: "0 0 1rem", fontSize: 11, color: "#aaa" }}>{subtitle}</p>}
-    <div style={{ marginTop: subtitle ? 0 : "1rem" }}>{children}</div>
-  </div>
-);
-
-const KPI = ({ label, value, sub, color, icon }) => (
-  <div style={{
-    background: "#fff", borderRadius: 12, padding: "1.4rem", textAlign: "center",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.07)", border: "1px solid #e8ecf8",
-  }}>
-    {icon && <div style={{ fontSize: 24, marginBottom: 6 }}>{icon}</div>}
-    <div style={{ fontSize: 32, fontWeight: 800, color }}>{value}</div>
-    <div style={{ fontSize: 13, fontWeight: 600, color: "#333", marginTop: 4 }}>{label}</div>
-    {sub && <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{sub}</div>}
-  </div>
-);
-
 const ScTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background: "#1a2e5a", color: "#fff", padding: "8px 12px", borderRadius: 8, fontSize: 12 }}>
-      <div style={{ fontWeight: 700 }}>{label}</div>
+    <div style={{ background: "var(--pg-ink)", color: "#fff", padding: "7px 11px", borderRadius: 8, fontSize: 12 }}>
+      <div style={{ fontWeight: 500 }}>{label}</div>
       <div>{payload[0].value?.toLocaleString()} affaires</div>
     </div>
   );
@@ -90,13 +83,14 @@ const ScTooltip = ({ active, payload, label }) => {
 export default function ScandalsDashboard({ onNavigate }) {
   const [data, setData] = useState(null);
   const [err,  setErr]  = useState(null);
+  const byShortName = useParties();
 
   useEffect(() => {
     fetchDashboardScandales().then(setData).catch((e) => setErr(e.message));
   }, []);
 
-  if (err)  return <p style={{ color: "red", padding: "2rem" }}>Erreur : {err}</p>;
-  if (!data) return <p style={{ padding: "2rem" }}>Chargement…</p>;
+  if (err)  return <p style={{ color: "var(--color-red-600)", padding: "2rem" }}>Erreur : {err}</p>;
+  if (!data) return <p style={{ padding: "2rem", color: "var(--pg-muted)" }}>Chargement…</p>;
 
   const timeline   = toTime(data.par_annee);
   const topPartis  = toChart(data.par_parti, 12);
@@ -109,38 +103,40 @@ export default function ScandalsDashboard({ onNavigate }) {
 
   const go = (filters) => onNavigate("exploration", { tab: "scandales", ...filters });
 
+  // Couleur officielle du parti, désaturée pour le graphique (fond sobre du reste du site)
+  const partyColor = (code) => {
+    const official = byShortName?.[code]?.color;
+    return official ? desaturateHex(official, 0.7) : "#a6a69e";
+  };
+
   return (
-    <div style={{ padding: "1.5rem", background: "#f5f6fa", minHeight: "100vh" }}>
+    <div style={{ padding: "1.5rem", background: "var(--pg-bg)", minHeight: "100vh" }}>
       {/* Header */}
-      <div style={{
-        background: "linear-gradient(135deg, #7b0000 0%, #c0392b 60%, #e74c3c 100%)",
-        borderRadius: 14, padding: "1.8rem 2rem", marginBottom: "1.5rem", color: "#fff",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <span style={{ fontSize: 36 }}>⚖</span>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Scandales politiques</h2>
-            <p style={{ margin: "0.3rem 0 0", opacity: 0.85, fontSize: 13 }}>
-              Analyse détaillée de toutes les affaires judiciaires impliquant des élus français
-            </p>
-          </div>
-          <button onClick={() => go({})} style={{
-            marginLeft: "auto", background: "rgba(255,255,255,0.2)",
-            border: "1px solid rgba(255,255,255,0.4)", color: "#fff",
-            borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontSize: 13, fontWeight: 600,
-          }}>
-            Explorer les données →
-          </button>
+      <Card style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: "1.5rem" }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 10, background: "var(--color-red-100)", color: "var(--color-red-800)",
+          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, flexShrink: 0,
+        }}>⚖</div>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 500, color: "var(--pg-ink)", letterSpacing: "-0.3px" }}>Scandales politiques</h2>
+          <p style={{ margin: "0.25rem 0 0", fontSize: 12.5, color: "var(--pg-muted)" }}>
+            Analyse détaillée de toutes les affaires judiciaires impliquant des élus français
+          </p>
         </div>
-      </div>
+        <button onClick={() => go({})} style={{
+          marginLeft: "auto", background: "var(--pg-navy)", border: "none", color: "#fff",
+          borderRadius: "var(--pg-r-sm)", padding: "8px 16px", cursor: "pointer", fontSize: 13, fontWeight: 500,
+        }}>
+          Explorer les données →
+        </button>
+      </Card>
 
       {/* KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
-        <KPI icon="📁" label="Affaires recensées"   value={data.total?.toLocaleString()} color="#c0392b" />
-        <KPI icon="🏛" label="Partis impliqués"     value={totalPartis}                  color="#1a3a6e" />
-        <KPI icon="📋" label="Catégories d'infraction" value={totalCats}                 color="#8e44ad" />
-        <KPI icon="⚖" label="Condamnations"         value={condamnes.toLocaleString()}   color="#7b0000"
-          sub="statut CONDAMNÉ" />
+        <MetricCard icon="📁" label="Affaires recensées" value={data.total?.toLocaleString()} />
+        <MetricCard icon="🏛" label="Partis impliqués" value={totalPartis} />
+        <MetricCard icon="📋" label="Catégories d'infraction" value={totalCats} />
+        <MetricCard icon="⚖" label="Condamnations" value={condamnes.toLocaleString()} sub="statut CONDAMNÉ" />
       </div>
 
       {/* Hémicycle — Assemblée nationale actuelle par parti (données réelles) */}
@@ -156,18 +152,18 @@ export default function ScandalsDashboard({ onNavigate }) {
             <AreaChart data={timeline} margin={{ top: 10, right: 20, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="scGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#c0392b" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#c0392b" stopOpacity={0} />
+                  <stop offset="5%"  stopColor="#c4503e" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#c4503e" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e0" />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#71716a" }} axisLine={{ stroke: "#e5e5e0" }} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: "#71716a" }} axisLine={{ stroke: "#e5e5e0" }} tickLine={false} />
               <Tooltip content={<ScTooltip />} />
-              <Area type="monotone" dataKey="value" stroke="#c0392b" strokeWidth={2.5}
-                fill="url(#scGrad)" dot={{ r: 3, fill: "#c0392b" }}
+              <Area type="monotone" dataKey="value" stroke="#c4503e" strokeWidth={2}
+                fill="url(#scGrad)" dot={{ r: 2.5, fill: "#c4503e" }}
                 activeDot={{
-                  r: 7, fill: "#7b0000", cursor: "pointer",
+                  r: 6, fill: "#b9832a", cursor: "pointer",
                   onClick: (_, p) => go({ annee: Number(p.payload.name) }),
                 }} />
             </AreaChart>
@@ -181,13 +177,13 @@ export default function ScandalsDashboard({ onNavigate }) {
           subtitle="Cliquez sur un parti pour explorer ses affaires">
           <ResponsiveContainer width="100%" height={340}>
             <BarChart data={topPartis} layout="vertical" margin={{ left: 10, right: 44 }}>
-              <XAxis type="number" tick={{ fontSize: 10 }} />
-              <YAxis type="category" dataKey="name" width={68} tick={{ fontSize: 11 }} />
+              <XAxis type="number" tick={{ fontSize: 10, fill: "#71716a" }} axisLine={{ stroke: "#e5e5e0" }} tickLine={false} />
+              <YAxis type="category" dataKey="name" width={68} tick={{ fontSize: 11, fill: "#24241f" }} axisLine={{ stroke: "#e5e5e0" }} tickLine={false} />
               <Tooltip content={<ScTooltip />} />
               <Bar dataKey="value" radius={[0, 5, 5, 0]} cursor="pointer"
                 onClick={(d) => go({ parti: d.name })}>
-                {topPartis.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#555" }} />
+                {topPartis.map((p, i) => <Cell key={i} fill={partyColor(p.name)} />)}
+                <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#71716a" }} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -197,13 +193,13 @@ export default function ScandalsDashboard({ onNavigate }) {
           subtitle="Cliquez sur une catégorie pour voir les affaires correspondantes">
           <ResponsiveContainer width="100%" height={340}>
             <BarChart data={topCats} layout="vertical" margin={{ left: 10, right: 44 }}>
-              <XAxis type="number" tick={{ fontSize: 10 }} />
-              <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 10 }} />
+              <XAxis type="number" tick={{ fontSize: 10, fill: "#71716a" }} axisLine={{ stroke: "#e5e5e0" }} tickLine={false} />
+              <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 10, fill: "#24241f" }} axisLine={{ stroke: "#e5e5e0" }} tickLine={false} />
               <Tooltip content={<ScTooltip />} />
               <Bar dataKey="value" radius={[0, 5, 5, 0]} cursor="pointer"
                 onClick={(d) => go({ category: d.name })}>
-                {topCats.map((_, i) => <Cell key={i} fill={COLORS[(i + 4) % COLORS.length]} />)}
-                <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#555" }} />
+                {topCats.map((_, i) => <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />)}
+                <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#71716a" }} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -234,12 +230,12 @@ export default function ScandalsDashboard({ onNavigate }) {
               const color = statutColor(s.name);
               return (
                 <div key={i} style={{ cursor: "pointer" }} onClick={() => go({ statut: s.name })}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5 }}>
-                    <span style={{ fontWeight: 700, color }}>{s.name.replace(/_/g, " ")}</span>
-                    <span style={{ color: "#555" }}>{s.value.toLocaleString()} <span style={{ color: "#aaa" }}>({pct}%)</span></span>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 5 }}>
+                    <span style={{ fontWeight: 500, color: "var(--pg-ink)" }}>{s.name.replace(/_/g, " ")}</span>
+                    <span style={{ color: "var(--pg-muted)" }}>{s.value.toLocaleString()} <span>({pct}%)</span></span>
                   </div>
-                  <div style={{ background: "#eee", borderRadius: 5, height: 12 }}>
-                    <div style={{ width: `${pct}%`, background: color, height: 12, borderRadius: 5, transition: "width 0.6s" }} />
+                  <div style={{ background: "var(--color-gray-100)", borderRadius: 5, height: 8 }}>
+                    <div style={{ width: `${pct}%`, background: color, height: 8, borderRadius: 5, transition: "width 0.6s" }} />
                   </div>
                 </div>
               );

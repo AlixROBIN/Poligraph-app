@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import PartyLogo from "./PartyLogo";
+import Badge from "./Badge";
+import Card from "./Card";
 
 const BASE_URL = (process.env.REACT_APP_API_URL || "http://localhost:8000") + "/api/proxy";
 
@@ -17,14 +19,9 @@ async function apiFetch(path, params = {}) {
 // Composants utilitaires
 // ============================================================
 const PartyBadge = ({ party }) => {
-  if (!party) return <span style={badge("#ccc", "#555")}>Indépendant</span>;
-  const name  = party.shortName || party.name || "?";
-  const color = party.color || "#1a3a6e";
-  return (
-    <span style={badge(color + "22", color)}>
-      <PartyLogo code={name} size={13} />
-    </span>
-  );
+  if (!party) return <Badge tone="neutral" text="Indépendant" />;
+  const name = party.shortName || party.name || "?";
+  return <Badge party={name} text={<PartyLogo code={name} size={13} />} />;
 };
 
 const badge = (bg, color) => ({
@@ -483,42 +480,51 @@ const PoliticianList = ({ onSelect }) => {
   return (
     <div>
       <div style={{ display:"flex", gap:8, marginBottom:16 }}>
-        <input style={{ ...inputS, flex:1 }} placeholder="Rechercher un élu (nom, prénom...)"
+        <input
+          placeholder="Rechercher un élu (nom, prénom...)"
           value={q} onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && search(1)} />
-        <button style={btnS} onClick={() => search(1)}>Rechercher</button>
+          onKeyDown={(e) => e.key === "Enter" && search(1)}
+          style={{
+            flex: 1, padding: "8px 12px", borderRadius: "var(--pg-r-sm)",
+            border: "1px solid var(--pg-line)", fontSize: 13, background: "var(--pg-surface)",
+            color: "var(--pg-ink)", outline: "none",
+          }}
+        />
+        <button onClick={() => search(1)} style={{
+          padding: "8px 18px", background: "var(--pg-navy)", color: "#fff", border: "none",
+          borderRadius: "var(--pg-r-sm)", cursor: "pointer", fontWeight: 500, fontSize: 13,
+        }}>Rechercher</button>
       </div>
 
-      {data && <p style={{ fontSize:13, color:"#888", marginBottom:12 }}>
+      {data && <p style={{ fontSize:12.5, color:"var(--pg-muted)", marginBottom:12 }}>
         {data.pagination?.total?.toLocaleString()} représentants recensés
       </p>}
 
-      {loading && <p style={{ color:"#888" }}>Chargement...</p>}
+      {loading && <p style={{ color:"var(--pg-muted)" }}>Chargement...</p>}
 
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(220px, 1fr))", gap:12 }}>
-        {data?.data?.map((p) => (
+      <Card padding="0">
+        {data?.data?.map((p, i) => (
           <div key={p.id} onClick={() => onSelect(p.slug)}
-            style={{ background:"#fff", borderRadius:10, padding:"14px",
-              boxShadow:"0 1px 4px rgba(0,0,0,0.07)", cursor:"pointer",
-              border:"1px solid transparent", transition:"border 0.15s",
-              display:"flex", flexDirection:"column", gap:8 }}
-            onMouseEnter={(e) => e.currentTarget.style.border="1px solid #1a3a6e"}
-            onMouseLeave={(e) => e.currentTarget.style.border="1px solid transparent"}>
-            <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-              {p.photoUrl
-                ? <img src={p.photoUrl} alt="" style={{ width:42,height:42,borderRadius:"50%",objectFit:"cover" }}/>
-                : <div style={{ width:42,height:42,borderRadius:"50%",background:"#e8eeff",
-                    display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:18,color:"#1a3a6e",fontWeight:700 }}>{p.fullName?.[0]}</div>
-              }
-              <div>
-                <div style={{ fontWeight:600, fontSize:14 }}>{p.fullName}</div>
-                <PartyBadge party={p.currentParty} />
-              </div>
-            </div>
+            style={{
+              display: "flex", alignItems: "center", gap: 12,
+              padding: "10px 14px", cursor: "pointer",
+              borderBottom: i < data.data.length - 1 ? "1px solid var(--pg-line)" : "none",
+              transition: "background 0.12s",
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = "var(--color-gray-50)"}
+            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+            {p.photoUrl
+              ? <img src={p.photoUrl} alt="" style={{ width:32,height:32,borderRadius:"50%",objectFit:"cover",flexShrink:0 }}/>
+              : <div style={{ width:32,height:32,borderRadius:"50%",background:"var(--color-blue-50)",
+                  display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
+                  fontSize:13,color:"var(--color-blue-800)",fontWeight:500 }}>{p.fullName?.[0]}</div>
+            }
+            <span style={{ fontWeight: 500, fontSize: 13.5, color: "var(--pg-ink)", flex: 1 }}>{p.fullName}</span>
+            <PartyBadge party={p.currentParty} />
+            <span style={{ color: "var(--pg-muted)", fontSize: 13 }}>›</span>
           </div>
         ))}
-      </div>
+      </Card>
 
       <Pager pagination={data?.pagination} onPage={search} />
     </div>

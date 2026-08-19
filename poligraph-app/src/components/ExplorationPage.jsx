@@ -1,5 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
 import PartyLogo from "./PartyLogo";
+import Badge from "./Badge";
+
+// Ton sémantique du statut judiciaire/de vote, pour le badge pilule.
+function statutTone(status) {
+  const s = (status || "").toUpperCase();
+  if (s.includes("CONDAMN") || s === "REJECTED") return "danger";
+  if (s.includes("ENQUETE") || s.includes("EN_COURS") || s.includes("INSTRUCTION") || s.includes("EXAMEN") || s.includes("APPEL")) return "warning";
+  if (s.includes("RELAXE") || s.includes("ACQUITT") || s.includes("NON_LIEU") || s.includes("CLASSEMENT") || s === "ADOPTED") return "success";
+  return "neutral";
+}
 
 const BASE_URL     = (process.env.REACT_APP_API_URL || "http://localhost:8000") + "/api";
 const PROXY_URL    = (process.env.REACT_APP_API_URL || "http://localhost:8000") + "/api/proxy";
@@ -365,15 +375,16 @@ const ScandalSearch = ({ filters, initial = {} }) => {
                       <tr key={i}
                         onClick={() => setSelected(isSelected ? null : i)}
                         style={{
-                          background: isSelected ? "#eef2ff" : i % 2 === 0 ? "#fff" : "#f9fafc",
+                          background: isSelected ? "var(--color-blue-50)" : "transparent",
                           cursor: "pointer",
-                          borderLeft: isSelected ? "3px solid #1a3a6e" : "3px solid transparent",
+                          borderLeft: isSelected ? "3px solid var(--pg-navy)" : "3px solid transparent",
+                          transition: "background 0.12s",
                         }}>
                         <td style={{ ...tdStyle, maxWidth: 280 }} title={row.title}>
                           {row.title?.slice(0, 60)}{row.title?.length > 60 ? "…" : ""}
                         </td>
-                        <td style={tdStyle}><Badge text={row.category} /></td>
-                        <td style={tdStyle}><span style={{ fontSize: 11 }}>{row.status?.replace(/_/g, " ")}</span></td>
+                        <td style={tdStyle}>{row.category && <Badge tone="info" size="sm" text={row.category.replace(/_/g, " ")} />}</td>
+                        <td style={tdStyle}>{row.status && <Badge tone={statutTone(row.status)} size="sm" text={row.status.replace(/_/g, " ")} />}</td>
                         <td style={tdStyle}>{row.politician_name}</td>
                         <td style={tdStyle}>{row.party_short ? <PartyLogo code={row.party_short} size={14} /> : "—"}</td>
                         <td style={tdStyle}>{row.annee_faits || "—"}</td>
@@ -488,17 +499,16 @@ const VoteSearch = ({ filters, initial = {} }) => {
                       <tr key={i}
                         onClick={() => setSelected(isSelected ? null : i)}
                         style={{
-                          background: isSelected ? "#eef2ff" : i % 2 === 0 ? "#fff" : "#f9fafc",
+                          background: isSelected ? "var(--color-blue-50)" : "transparent",
                           cursor: "pointer",
-                          borderLeft: isSelected ? `3px solid ${adopted ? "#2ecc71" : "#e74c3c"}` : "3px solid transparent",
+                          borderLeft: isSelected ? `3px solid ${adopted ? "var(--color-green-600)" : "var(--color-red-600)"}` : "3px solid transparent",
+                          transition: "background 0.12s",
                         }}>
                         <td style={{ ...tdStyle, maxWidth: 340 }} title={row.title}>
                           {row.title?.slice(0, 70)}{row.title?.length > 70 ? "…" : ""}
                         </td>
                         <td style={tdStyle}>
-                          <span style={{ color: adopted ? "#1a7a4a" : "#c0392b", fontWeight: 600, fontSize: 12 }}>
-                            {adopted ? "✓ Adopté" : "✗ Rejeté"}
-                          </span>
+                          <Badge tone={adopted ? "success" : "danger"} size="sm" text={adopted ? "Adopté" : "Rejeté"} />
                         </td>
                         <td style={tdStyle}>{row.annee_vote}</td>
                         <td style={{ ...tdStyle, color: "#1a7a4a", fontWeight: 600 }}>{row.votesFor}</td>
@@ -534,19 +544,6 @@ const VoteSearch = ({ filters, initial = {} }) => {
 };
 
 // ---- Composants utilitaires ----
-const Badge = ({ text }) => {
-  if (!text) return null;
-  return (
-    <span style={{
-      fontSize: 10, padding: "2px 7px", borderRadius: 4,
-      background: "#e8ecf8", color: "#1a3a6e", fontWeight: 700, whiteSpace: "nowrap",
-      letterSpacing: "0.02em",
-    }}>
-      {text.replace(/_/g, " ")}
-    </span>
-  );
-};
-
 const Pagination = ({ total, offset, limit, onChange }) => {
   const page    = Math.floor(offset / limit);
   const maxPage = Math.ceil(total / limit) - 1;
@@ -571,15 +568,16 @@ const VERDICT_CFG = {
   UNVERIFIABLE: { label: "Invérifiable",  color: "#95a5a6", bg: "#f2f3f4" },
 };
 
+const VERDICT_TONE = {
+  TRUE: "success", MOSTLY_TRUE: "success",
+  HALF_TRUE: "warning", MISLEADING: "warning",
+  MOSTLY_FALSE: "danger", FALSE: "danger",
+  UNVERIFIABLE: "neutral",
+};
+
 const VerdictBadge = ({ rating }) => {
-  const cfg = VERDICT_CFG[rating] || { label: rating, color: "#888", bg: "#f5f5f5" };
-  return (
-    <span style={{
-      background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}55`,
-      borderRadius: 12, padding: "2px 10px", fontSize: 11, fontWeight: 700,
-      whiteSpace: "nowrap",
-    }}>{cfg.label}</span>
-  );
+  const cfg = VERDICT_CFG[rating] || { label: rating };
+  return <Badge tone={VERDICT_TONE[rating] || "neutral"} text={cfg.label} />;
 };
 
 const FactcheckSearch = ({ initial = {} }) => {
@@ -777,8 +775,8 @@ const selectStyle = { width: "100%", padding: "8px 10px", borderRadius: 8, borde
 const btnStyle    = { padding: "9px 18px", background: "#1a3a6e", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13 };
 const tabBtn      = { padding: "7px 20px", border: "none", borderRadius: "6px 6px 0 0", cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.15s" };
 const tableStyle  = { width: "100%", borderCollapse: "collapse", fontSize: 13 };
-const thStyle     = { textAlign: "left", padding: "9px 10px", background: "#f0f3fa", fontWeight: 700, color: "#1a3a6e", borderBottom: "2px solid #d4ddf7", letterSpacing: "0.02em", fontSize: 12 };
-const tdStyle     = { padding: "8px 10px", borderBottom: "1px solid #f0f2f8", verticalAlign: "top" };
+const thStyle     = { textAlign: "left", padding: "10px 12px", background: "transparent", fontWeight: 500, color: "var(--pg-muted)", borderBottom: "1px solid var(--pg-line)", fontSize: 11.5, textTransform: "uppercase", letterSpacing: "0.03em" };
+const tdStyle     = { padding: "11px 12px", borderBottom: "1px solid var(--pg-line)", verticalAlign: "top" };
 const pgBtn       = { padding: "5px 14px", border: "1px solid #d4ddf7", borderRadius: 5, background: "#fff", cursor: "pointer", color: "#1a3a6e", fontWeight: 600 };
 
 export default ExplorationPage;

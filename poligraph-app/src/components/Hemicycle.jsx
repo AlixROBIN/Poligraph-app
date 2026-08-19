@@ -1,18 +1,21 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { fetchHemicycle } from "../data/api";
 
-// Rangs concentriques de l'hémicycle : rayon + nombre de sièges par rang.
+// Rangs concentriques de l'hémicycle : rayon + nombre de sièges par rang,
+// exprimés dans un système de référence 620×300 — mis à l'échelle au
+// rendu selon la largeur réelle du conteneur (voir useLayoutEffect plus
+// bas) pour ne jamais déborder sur mobile.
 const ROWS = [
-  { r: 60,  cap: 14 },
-  { r: 92,  cap: 20 },
-  { r: 124, cap: 26 },
-  { r: 156, cap: 32 },
-  { r: 188, cap: 38 },
-  { r: 220, cap: 44 },
+  { r: 64,  cap: 12 },
+  { r: 100, cap: 17 },
+  { r: 136, cap: 22 },
+  { r: 172, cap: 27 },
+  { r: 208, cap: 32 },
+  { r: 244, cap: 37 },
 ];
 const TOTAL_CAP = ROWS.reduce((s, r) => s + r.cap, 0);
-const W = 620, H = 300;
-const CX = W / 2, CY = H - 10;
+const REF_W = 620, REF_H = 300;
+const REF_CX = REF_W / 2, REF_CY = REF_H - 10;
 
 function computeSeats(partis) {
   const totalDeputes = partis.reduce((s, p) => s + p.deputes, 0);
@@ -31,8 +34,8 @@ function computeSeats(partis) {
     for (let s = 0; s < row.cap; s++) {
       const t = row.cap === 1 ? 0.5 : s / (row.cap - 1);
       const angle = Math.PI - t * Math.PI; // 180° (gauche) → 0° (droite)
-      const x = CX + row.r * Math.cos(angle);
-      const y = CY - row.r * Math.sin(angle);
+      const x = REF_CX + row.r * Math.cos(angle);
+      const y = REF_CY - row.r * Math.sin(angle);
       const party = partis[flat[idx++] ?? partis.length - 1];
       seats.push({ x, y, party });
     }
@@ -44,12 +47,39 @@ export default function Hemicycle({ onNavigate }) {
   const [data, setData]   = useState(null);
   const [error, setError] = useState(null);
   const [hover, setHover] = useState(null);
+  const [width, setWidth] = useState(0);
+  const roRef = useRef(null);
 
   useEffect(() => {
     fetchHemicycle().then(setData).catch(() => setError(true));
   }, []);
 
-  const seats = useMemo(() => computeSeats(data?.partis || []), [data]);
+  // Ref en callback plutôt qu'un useLayoutEffect(deps:[]) classique : le
+  // conteneur n'existe pas encore lors du tout premier rendu (état
+  // "Chargement...") donc un effet à montage unique manquerait le nœud DOM
+  // réel une fois les données arrivées. Le callback ref, lui, se déclenche
+  // à chaque fois que le nœud apparaît, peu importe le rendu conditionnel.
+  const wrapRef = useCallback((el) => {
+    if (roRef.current) { roRef.current.disconnect(); roRef.current = null; }
+    if (el) {
+      const ro = new ResizeObserver((entries) => {
+        const w = entries[0]?.contentRect?.width;
+        if (w) setWidth(w);
+      });
+      ro.observe(el);
+      roRef.current = ro;
+    }
+  }, []);
+
+  const refSeats = useMemo(() => computeSeats(data?.partis || []), [data]);
+
+  // Mise à l'échelle : le conteneur peut être plus étroit que REF_W (mobile,
+  // carte en colonne) — on réduit tout proportionnellement plutôt que de
+  // laisser les points déborder du cadre.
+  const scale  = width > 0 ? Math.min(width / REF_W, 1) : 1;
+  const height = REF_H * scale;
+  const seats  = refSeats.map((s) => ({ ...s, x: s.x * scale, y: s.y * scale }));
+  const dotSize = Math.max(7, 11 * scale);
 
   const go = (code) => onNavigate("exploration", { tab: "scandales", parti: code });
 
@@ -59,14 +89,14 @@ export default function Hemicycle({ onNavigate }) {
   return (
     <div style={cardStyle}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 6 }}>
-        <h3 style={{ margin: "0 0 4px", fontSize: 15, color: "#1a2e5a" }}>Assemblée nationale — député·e·s actuel·le·s par parti</h3>
-        <span style={{ fontSize: 11, color: "#8b93a7" }}>
+        <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 500, color: "var(--pg-ink)" }}>Assemblée nationale — député·e·s actuel·le·s par parti</h3>
+        <span style={{ fontSize: 11, color: "var(--pg-muted)" }}>
           {data.sieges_couverts}/{data.total_sieges} sièges couverts — {data.autres_non_inscrits} non-inscrits ou petits groupes
         </span>
       </div>
-      <p style={{ fontSize: 11, color: "#aaa", margin: "0 0 0.75rem" }}>Survolez ou cliquez un point pour explorer ce parti</p>
+      <p style={{ fontSize: 11, color: "var(--pg-muted)", margin: "0 0 0.75rem" }}>Survolez ou cliquez un point pour explorer ce parti</p>
 
-      <div style={{ position: "relative", height: H, maxWidth: W, margin: "0 auto" }}>
+      <div ref={wrapRef} style={{ position: "relative", height, maxWidth: REF_W, margin: "0 auto" }}>
         {seats.map((seat, i) => (
           <div
             key={i}
@@ -76,10 +106,10 @@ export default function Hemicycle({ onNavigate }) {
             title={`${seat.party.name} — ${seat.party.deputes} député·e·s`}
             style={{
               position: "absolute", left: seat.x, top: seat.y,
-              width: 9, height: 9, borderRadius: "50%",
-              background: seat.party.color, cursor: "pointer",
-              transform: hover === seat.party ? "translate(-50%,-50%) scale(1.6)" : "translate(-50%,-50%)",
-              boxShadow: hover === seat.party ? "0 0 0 3px rgba(20,33,61,0.12)" : "none",
+              width: dotSize, height: dotSize, borderRadius: "50%",
+              background: `color-mix(in srgb, ${seat.party.color} 78%, white)`, cursor: "pointer",
+              transform: hover === seat.party ? "translate(-50%,-50%) scale(1.5)" : "translate(-50%,-50%)",
+              boxShadow: hover === seat.party ? "0 0 0 3px rgba(36,36,31,0.10)" : "none",
               transition: "transform 0.12s, box-shadow 0.12s",
               zIndex: hover === seat.party ? 2 : 1,
             }}
@@ -88,9 +118,9 @@ export default function Hemicycle({ onNavigate }) {
         {hover && (
           <div style={{
             position: "absolute", bottom: 6, left: "50%", transform: "translateX(-50%)",
-            background: "#14213d", color: "#fff", padding: "7px 14px", borderRadius: 8,
+            background: "var(--pg-ink)", color: "#fff", padding: "7px 14px", borderRadius: 8,
             fontSize: 12.5, display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap",
-            boxShadow: "0 6px 20px rgba(20,33,61,0.25)",
+            boxShadow: "var(--pg-sh-md)",
           }}>
             {hover.logoUrl && <img src={hover.logoUrl} alt="" style={{ height: 16, filter: "brightness(0) invert(1)", opacity: 0.9 }} />}
             <span>{hover.name} — <b>{hover.deputes}</b> député·e·s</span>
@@ -104,10 +134,14 @@ export default function Hemicycle({ onNavigate }) {
             key={p.code}
             onClick={() => go(p.code)}
             style={{
-              display: "flex", alignItems: "center", gap: 6, padding: "5px 10px 5px 8px",
-              borderRadius: 999, background: "#eef1f6", border: "1px solid #dbe1ee",
-              fontSize: 11.5, cursor: "pointer", transition: "border-color 0.12s",
+              display: "flex", alignItems: "center", gap: 6, padding: "5px 11px 5px 9px",
+              borderRadius: 999,
+              background: `color-mix(in srgb, ${p.color} 12%, white)`,
+              color: `color-mix(in srgb, ${p.color} 65%, black)`,
+              fontSize: 11.5, fontWeight: 500, cursor: "pointer", transition: "filter 0.12s",
             }}
+            onMouseEnter={(e) => e.currentTarget.style.filter = "brightness(0.97)"}
+            onMouseLeave={(e) => e.currentTarget.style.filter = "none"}
           >
             {p.logoUrl
               ? <img src={p.logoUrl} alt="" style={{ height: 13, maxWidth: 20, objectFit: "contain" }} />
@@ -118,7 +152,7 @@ export default function Hemicycle({ onNavigate }) {
         ))}
       </div>
 
-      <p style={{ fontSize: 10, color: "#aaa", textAlign: "center", marginTop: 10, marginBottom: 0 }}>
+      <p style={{ fontSize: 10, color: "var(--pg-muted)", textAlign: "center", marginTop: 10, marginBottom: 0 }}>
         Élus recensés avec un mandat de député en cours — {data.source}
       </p>
     </div>
@@ -126,7 +160,7 @@ export default function Hemicycle({ onNavigate }) {
 }
 
 const cardStyle = {
-  background: "#fff", borderRadius: 10, padding: "1.2rem",
-  boxShadow: "0 1px 4px rgba(0,0,0,0.08)", border: "1px solid #e8ecf8",
+  background: "var(--pg-surface)", borderRadius: "var(--pg-r-md)", padding: "1.4rem",
+  border: "1px solid var(--pg-line)",
   marginBottom: "1.5rem",
 };

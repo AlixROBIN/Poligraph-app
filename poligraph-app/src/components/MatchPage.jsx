@@ -125,37 +125,37 @@ export default function MatchPage() {
   };
 
   return (
-    <div style={{ padding: "1.5rem", background: "#f5f6fa", minHeight: "100vh" }}>
+    <div style={{ padding: "1.5rem", background: "var(--pg-bg)", minHeight: "100vh" }}>
       <Header />
       <div style={{ maxWidth: 480, margin: "0 auto", padding: "1rem 0" }}>
         {/* Progress */}
         <div style={{ marginBottom: "1.2rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#888", marginBottom: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--pg-muted)", marginBottom: 6 }}>
             <span>Question {idx + 1} / {total}</span>
             <span>{current.topic} {current.emoji}</span>
           </div>
-          <div style={{ height: 6, borderRadius: 3, background: "#e8ecf8", overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${((idx) / total) * 100}%`, background: "#1a3a6e", transition: "width 0.3s ease", borderRadius: 3 }} />
+          <div style={{ height: 5, borderRadius: 3, background: "var(--color-gray-100)", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${((idx) / total) * 100}%`, background: "var(--pg-navy)", transition: "width 0.3s ease", borderRadius: 3 }} />
           </div>
         </div>
 
         {/* Card */}
-        <div style={{ ...cardStyle, background: "#fff", borderRadius: 20, padding: "2.5rem 2rem", boxShadow: "0 8px 32px rgba(0,0,0,0.12)", border: "1px solid #e8ecf8", minHeight: 200, display: "flex", flexDirection: "column", justifyContent: "center", textAlign: "center", marginBottom: "1.5rem" }}>
-          <div style={{ fontSize: 44, marginBottom: 12 }}>{current.emoji}</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>{current.topic}</div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: "#1a2e5a", lineHeight: 1.55 }}>
+        <div style={{ ...cardStyle, background: "var(--pg-surface)", borderRadius: "var(--pg-r-lg)", padding: "2.25rem 2rem", boxShadow: "var(--pg-sh-sm)", border: "1px solid var(--pg-line)", minHeight: 200, display: "flex", flexDirection: "column", justifyContent: "center", textAlign: "center", marginBottom: "1.5rem" }}>
+          <div style={{ fontSize: 38, marginBottom: 12 }}>{current.emoji}</div>
+          <div style={{ fontSize: 11, fontWeight: 500, color: "var(--pg-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>{current.topic}</div>
+          <div style={{ fontSize: 17, fontWeight: 500, color: "var(--pg-ink)", lineHeight: 1.55, letterSpacing: "-0.2px" }}>
             « {current.texte} »
           </div>
           {current.detail && (
             <div style={{ marginTop: 14 }}>
               <button
                 onClick={() => setShowDetail(v => !v)}
-                style={{ background: "none", border: "1px solid #c8d0e8", borderRadius: 8, padding: "4px 12px", fontSize: 12, color: "#5a7abf", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+                style={{ background: "none", border: "1px solid var(--pg-line)", borderRadius: 8, padding: "4px 12px", fontSize: 12, color: "var(--color-blue-600)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
               >
                 ℹ️ {showDetail ? "Masquer le contexte" : "En savoir plus"}
               </button>
               {showDetail && (
-                <div style={{ marginTop: 10, padding: "12px 14px", background: "#f4f6fb", borderRadius: 10, fontSize: 12, color: "#444", lineHeight: 1.6, textAlign: "left" }}>
+                <div style={{ marginTop: 10, padding: "12px 14px", background: "var(--color-gray-50)", borderRadius: 10, fontSize: 12, color: "var(--pg-ink)", lineHeight: 1.6, textAlign: "left" }}>
                   {current.detail}
                 </div>
               )}
@@ -163,34 +163,34 @@ export default function MatchPage() {
           )}
         </div>
 
-        {/* Boutons */}
+        {/* Boutons — pastel avec bordure de la couleur pleine, plus de gros encadré plat */}
         <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
           <button
             onClick={() => vote("contre")}
-            style={{ flex: 1, padding: "16px 8px", borderRadius: 14, border: "2px solid #e74c3c", background: "#fff", cursor: "pointer", fontSize: 22, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, transition: "background 0.15s" }}
-            onMouseEnter={e => e.currentTarget.style.background = "#fdedec"}
-            onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+            style={{ flex: 1, padding: "14px 8px", borderRadius: 14, border: "1.5px solid var(--color-red-400)", background: "var(--color-red-50)", cursor: "pointer", fontSize: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, transition: "background 0.15s" }}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--color-red-100)"}
+            onMouseLeave={e => e.currentTarget.style.background = "var(--color-red-50)"}
           >
             ❌
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#e74c3c" }}>Contre</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--color-red-800)" }}>Contre</span>
           </button>
           <button
             onClick={() => vote("neutre")}
-            style={{ flex: 0.7, padding: "16px 8px", borderRadius: 14, border: "2px solid #bbb", background: "#fff", cursor: "pointer", fontSize: 22, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, transition: "background 0.15s" }}
-            onMouseEnter={e => e.currentTarget.style.background = "#f5f5f5"}
-            onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+            style={{ flex: 0.7, padding: "14px 8px", borderRadius: 14, border: "1.5px solid var(--color-gray-400)", background: "var(--color-gray-50)", cursor: "pointer", fontSize: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, transition: "background 0.15s" }}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--color-gray-100)"}
+            onMouseLeave={e => e.currentTarget.style.background = "var(--color-gray-50)"}
           >
             😐
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#888" }}>Neutre</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--color-gray-800)" }}>Neutre</span>
           </button>
           <button
             onClick={() => vote("pour")}
-            style={{ flex: 1, padding: "16px 8px", borderRadius: 14, border: "2px solid #27ae60", background: "#fff", cursor: "pointer", fontSize: 22, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, transition: "background 0.15s" }}
-            onMouseEnter={e => e.currentTarget.style.background = "#eafaf1"}
-            onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+            style={{ flex: 1, padding: "14px 8px", borderRadius: 14, border: "1.5px solid var(--color-green-400)", background: "var(--color-green-50)", cursor: "pointer", fontSize: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, transition: "background 0.15s" }}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--color-green-100)"}
+            onMouseLeave={e => e.currentTarget.style.background = "var(--color-green-50)"}
           >
             ✅
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#27ae60" }}>Pour</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--color-green-800)" }}>Pour</span>
           </button>
         </div>
 

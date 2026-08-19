@@ -1,25 +1,92 @@
 :root {
-  /* Identité PoliGraph — palette, rayons et ombres partagés */
-  --pg-navy: #1a3a6e;
-  --pg-navy-soft: #2c5282;
-  --pg-navy-deep: #0f2549;
-  --pg-gold: #c9a227;
-  --pg-ink: #14213d;
-  --pg-muted: #5b6b85;
-  --pg-line: #dbe1ee;
-  --pg-bg: #eef1f6;
-  --pg-surface: #ffffff;
-  --pg-success: #2ecc71;
-  --pg-danger: #e74c3c;
-  --pg-warning: #f39c12;
+  /* ============================================================
+     Palette sémantique — 6 familles × 7 nuances.
+     Usage : fond pastel = nuance 50/100, texte sur ce fond =
+     nuance 800/900 de la MÊME famille (jamais de gris/noir
+     générique sur un fond coloré).
+     ============================================================ */
+  --color-gray-50:  #f7f7f5;
+  --color-gray-100: #efefea;
+  --color-gray-200: #e5e5e0;
+  --color-gray-400: #a6a69e;
+  --color-gray-600: #71716a;
+  --color-gray-800: #3d3d37;
+  --color-gray-900: #24241f;
+
+  --color-blue-50:  #eef2fa;
+  --color-blue-100: #dce6f5;
+  --color-blue-400: #6e93c9;
+  --color-blue-600: #3d6098;
+  --color-blue-800: #24406e;
+  --color-blue-900: #16294d;
+
+  --color-red-50:  #fbeeec;
+  --color-red-100: #f6ddd9;
+  --color-red-400: #de7e70;
+  --color-red-600: #c4503e;
+  --color-red-800: #8c2e20;
+  --color-red-900: #631f15;
+
+  --color-amber-50:  #fbf3e6;
+  --color-amber-100: #f5e4c2;
+  --color-amber-400: #d9a64e;
+  --color-amber-600: #b9832a;
+  --color-amber-800: #7a5518;
+  --color-amber-900: #543a10;
+
+  --color-green-50:  #eef5ee;
+  --color-green-100: #dcebdc;
+  --color-green-400: #7fae7f;
+  --color-green-600: #4f8350;
+  --color-green-800: #2f5730;
+  --color-green-900: #1f3b21;
+
+  --color-purple-50:  #f2eef5;
+  --color-purple-100: #e5dceb;
+  --color-purple-400: #a98bc2;
+  --color-purple-600: #82609f;
+  --color-purple-800: #573d6c;
+  --color-purple-900: #3b294a;
+
+  /* ============================================================
+     Tokens produit — identité PoliGraph, dérivés de la palette
+     ci-dessus. Bleu marine allégé, or remplacé par un ambre doux.
+     ============================================================ */
+  --pg-navy:      #26436d;
+  --pg-navy-soft: #3c5d8f;
+  --pg-navy-deep: #17293f;
+  --pg-gold:      var(--color-amber-600);
+  --pg-ink:       var(--color-gray-900);
+  --pg-muted:     var(--color-gray-600);
+  --pg-line:      var(--color-gray-200);
+  --pg-bg:        var(--color-gray-50);
+  --pg-surface:   #ffffff;
+  --pg-success:   var(--color-green-600);
+  --pg-danger:    var(--color-red-600);
+  --pg-warning:   var(--color-amber-600);
 
   --pg-r-sm: 8px;
   --pg-r-md: 12px;
   --pg-r-lg: 18px;
 
-  --pg-sh-sm: 0 1px 3px rgba(20, 33, 61, 0.08);
-  --pg-sh-md: 0 6px 20px rgba(20, 33, 61, 0.10);
-  --pg-sh-lg: 0 18px 44px rgba(20, 33, 61, 0.18);
+  /* Ombres très subtiles — plus de portées lourdes */
+  --pg-sh-sm: 0 1px 2px rgba(36, 36, 31, 0.05);
+  --pg-sh-md: 0 4px 14px rgba(36, 36, 31, 0.08);
+  --pg-sh-lg: 0 12px 32px rgba(36, 36, 31, 0.12);
+}
+
+/* Structure prête pour un futur dark mode : les tokens de surface/texte
+   sont déjà indirectes (--pg-bg, --pg-surface, --pg-ink...) donc les
+   redéfinir ici suffira le jour où c'est prioritaire. Non activé pour
+   l'instant (pas demandé), juste structuré. */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-ready] {
+    --pg-bg: var(--color-gray-900);
+    --pg-surface: #1a1a16;
+    --pg-ink: var(--color-gray-50);
+    --pg-muted: var(--color-gray-400);
+    --pg-line: var(--color-gray-800);
+  }
 }
 
 *, *::before, *::after {
@@ -31,6 +98,11 @@ html, body, #root {
 }
 body {
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background: #f4f6fa;
+  font-weight: 400;
+  background: var(--pg-bg);
+  color: var(--pg-ink);
   overflow-x: hidden;
+}
+h1, h2, h3, h4 {
+  font-weight: 500;
 }
