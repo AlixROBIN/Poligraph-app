@@ -47,7 +47,7 @@ from config import CLEANED_ANALYTICS_PARQUET
 from logger_config import setup_logger
 
 logger = setup_logger(__name__)
-app = FastAPI(title="PoliGraph API")
+app = FastAPI(title="MonAppPolitique API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -396,7 +396,7 @@ def chat_debug():
         "hf_key_set":    bool(hf_key),
         "hf_key_hint":   hf_key[:8] + "…" if hf_key else "MANQUANTE",
         "anthropic_key_set": bool(ant_key),
-        "groq_model":    os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        "groq_model":    os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"),
         "hf_qa_model":   os.getenv("HF_QA_MODEL", "cmarkea/distilcamembert-base-qa"),
         "hf_embed_model":os.getenv("HF_EMBED_MODEL", "ibm-granite/granite-embedding-311m-multilingual-r2"),
         "rag_ready":     _rag_vectorizer is not None,
@@ -408,7 +408,7 @@ def chat_debug():
         try:
             client = _get_groq()
             r = client.chat.completions.create(
-                model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+                model=os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"),
                 messages=[{"role": "user", "content": "Réponds juste 'ok'"}],
                 max_tokens=5, temperature=0.0,
             )
@@ -879,7 +879,7 @@ def predict_politician(req: PoliticianRequest):
 # ============================================================
 
 POLIGRAPH_BASE = "https://poligraph.fr/api"
-PROXY_HEADERS  = {"User-Agent": "PoliGraphApp/1.0"}
+PROXY_HEADERS  = {"User-Agent": "MonAppPolitique/1.0"}
 
 # Cache TTL pour les appels proxy (évite les doubles aller-retours réseau)
 _pg_cache: dict = {}   # key → {"data": ..., "at": float}
@@ -1578,7 +1578,7 @@ GOOGLE_NEWS_QUERIES = [
 ]
 
 
-_RSS_UA = "PoliGraph/1.0 (github.com/AlixROBIN/Poligraph-app; contact: alixanniv@gmail.com)"
+_RSS_UA = "MonAppPolitique/1.0 (github.com/AlixROBIN/Poligraph-app; contact: alixanniv@gmail.com)"
 
 
 # Cache RSS — évite de re-scraper à chaque requête
@@ -2047,7 +2047,7 @@ def predict_vote_endpoint(req: PredictVoteRequest):
 # Variables d'environnement :
 #   LLM_BACKEND      = "ollama" (défaut) | "groq" | "claude"
 #   GROQ_API_KEY     = clé Groq           (si backend=groq)
-#   GROQ_MODEL       = llama-3.1-8b-instant (défaut)
+#   GROQ_MODEL       = openai/gpt-oss-20b (défaut)
 #   OLLAMA_URL       = http://localhost:11434 (défaut)
 #   OLLAMA_MODEL     = llama3.1:8b          (défaut)
 #   ANTHROPIC_API_KEY= clé Claude           (si backend=claude)
@@ -2736,7 +2736,7 @@ Si l'utilisateur te corrige ou conteste un fait, ne t'excuse pas en improvisant 
 
 Format libre, direct et factuel, comme un journaliste qui a accès aux données."""
 
-_GROQ_MODEL   = os.getenv("GROQ_MODEL",   "llama-3.1-8b-instant")  # ~20k TPM vs 12k pour llama-3.3-70b
+_GROQ_MODEL   = os.getenv("GROQ_MODEL",   "openai/gpt-oss-20b")  # llama-3.1-8b-instant + llama-3.3-70b-versatile déprécié/retirés par Groq (08/2026) — remplacement officiel recommandé. TPM réel non re-vérifié, garder les plafonds de payload déjà en place par prudence.
 _OLLAMA_URL   = os.getenv("OLLAMA_URL",   "http://localhost:11434")
 _OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 _CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-4-8")
