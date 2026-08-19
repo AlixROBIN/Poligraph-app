@@ -4,6 +4,7 @@ import HomePage from "./components/HomePage";
 import ScandalsDashboard from "./components/ScandalsDashboard";
 import VotesDashboard from "./components/VotesDashboard";
 import FactchecksDashboard from "./components/FactchecksDashboard";
+import MatchPage from "./components/MatchPage";
 import ExplorationPage from "./components/ExplorationPage";
 import AnnuairePage from "./components/AnnuairePage";
 import JournalPage from "./components/JournalPage";
@@ -40,7 +41,7 @@ function App() {
         {page === "dashboard-scandales" && <ScandalsDashboard onNavigate={navigate} />}
         {page === "dashboard-votes"     && <VotesDashboard onNavigate={navigate} />}
         {page === "dashboard-factchecks"&& <FactchecksDashboard onNavigate={navigate} />}
-        {page === "match"               && <FactchecksDashboard onNavigate={navigate} initialTab="match" />}
+        {page === "match"               && <MatchPage />}
         {page === "exploration"         && <ExplorationPage key={JSON.stringify(explorationFilters)} initialFilters={explorationFilters} />}
         {page === "journal"    && <JournalPage />}
         {page === "annuaire"   && <AnnuairePage onNavigate={navigate} />}

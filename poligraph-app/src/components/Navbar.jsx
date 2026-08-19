@@ -2,11 +2,14 @@ import React from "react";
 import "../styles/Navbar.css";
 
 const PAGES = [
-  { id: "accueil",    label: "Accueil" },
-  { id: "annuaire",   label: "Annuaire" },
-  { id: "exploration",label: "Exploration" },
-  { id: "journal",    label: "Journal" },
-  { id: "match",      label: "🗳️ Mon programme" },
+  { id: "accueil",             label: "Accueil" },
+  { id: "annuaire",            label: "Annuaire" },
+  { id: "exploration",         label: "Exploration" },
+  { id: "journal",             label: "Journal" },
+  { id: "dashboard-scandales", label: "Scandales" },
+  { id: "dashboard-votes",     label: "Votes" },
+  { id: "dashboard-factchecks",label: "Fact-checking" },
+  { id: "match",               label: "🗳️ Mon programme" },
 ];
 
 const Navbar = ({ currentPage, onPageChange, canGoBack, onBack }) => (
