@@ -166,23 +166,23 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
     <div>
       {/* Header */}
       <button onClick={onBack} style={{ ...pgBtn, marginBottom: 16 }}>← Retour</button>
-      <div style={{ display: "flex", gap: 20, alignItems: "center", marginBottom: 24,
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "14px 20px", alignItems: "center", marginBottom: 24,
         background: "#fff", padding: "1.2rem", borderRadius: 10,
         boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
         {profile.photoUrl
           ? <img src={profile.photoUrl} alt={profile.fullName}
-              style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover",
+              style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover", flexShrink: 0,
                 border: `3px solid ${partyColor}`, boxShadow: "0 0 0 3px rgba(201,162,39,0.22)" }} />
-          : <div style={{ width: 72, height: 72, borderRadius: "50%",
+          : <div style={{ width: 72, height: 72, borderRadius: "50%", flexShrink: 0,
               background: partyColor + "22", display: "flex", alignItems: "center",
               justifyContent: "center", fontSize: 28, color: partyColor, fontWeight: 700,
               border: `3px solid ${partyColor}`, boxShadow: "0 0 0 3px rgba(201,162,39,0.22)" }}>
               {profile.fullName?.[0]}
             </div>
         }
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: "1 1 160px", minWidth: 0 }}>
           <h2 style={{ margin: 0 }}>{profile.fullName}</h2>
-          <div style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <PartyBadge party={party} />
             {profile.birthDate && (
               <span style={{ fontSize: 12, color: "#888" }}>
@@ -191,7 +191,7 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
             )}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <StatBox label="Mandats"   value={profile.mandates?.length} />
           <StatBox label="Scandales" value={affaires?.affairs?.length ?? profile.affairsCount} color="#e74c3c" />
           <StatBox label="Fact-checks" value={profile.factchecksCount} color="#f39c12" />
@@ -212,10 +212,10 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
       )}
 
       {/* Onglets — défilement horizontal sur mobile plutôt que de casser en plusieurs lignes */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto", flexWrap: "nowrap", WebkitOverflowScrolling: "touch" }}>
+      <div style={{ display: "flex", gap: 4, marginBottom: 16, overflowX: "auto", flexWrap: "nowrap", WebkitOverflowScrolling: "touch" }}>
         {PTABS.map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            style={{ ...tabBtn, whiteSpace: "nowrap", flexShrink: 0,
+            style={{ ...tabBtn, whiteSpace: "nowrap", flexShrink: 0, padding: "7px 12px", fontSize: 12,
               background: tab === t ? "#1a3a6e" : "#f0f2f8",
               color: tab === t ? "#fff" : "#555",
               borderBottom: tab === t ? "2px solid #c9a227" : "2px solid transparent",
