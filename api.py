@@ -2736,7 +2736,7 @@ Si l'utilisateur te corrige ou conteste un fait, ne t'excuse pas en improvisant 
 
 Format libre, direct et factuel, comme un journaliste qui a accès aux données."""
 
-_GROQ_MODEL   = os.getenv("GROQ_MODEL",   "openai/gpt-oss-20b")  # llama-3.1-8b-instant + llama-3.3-70b-versatile déprécié/retirés par Groq (08/2026) — remplacement officiel recommandé. TPM réel non re-vérifié, garder les plafonds de payload déjà en place par prudence.
+_GROQ_MODEL   = os.getenv("GROQ_MODEL",   "openai/gpt-oss-20b")  # anciens modèles Groq retirés (08/2026) — TPM réel non re-vérifié, garder les plafonds de payload déjà en place par prudence.
 _OLLAMA_URL   = os.getenv("OLLAMA_URL",   "http://localhost:11434")
 _OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 _CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-4-8")
