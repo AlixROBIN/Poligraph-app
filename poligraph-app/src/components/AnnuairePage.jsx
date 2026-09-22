@@ -73,6 +73,7 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
   const [votePage,       setVotePage]       = useState(1);
   const [factchecks,     setFactchecks]     = useState(null);
   const [factcheckPage,  setFactcheckPage]  = useState(1);
+  const [fcFilter,       setFcFilter]       = useState(null);
   const [relations,      setRelations]      = useState(null);
   const [partyMembers,   setPartyMembers]   = useState(null);
   const [partyPage,      setPartyPage]      = useState(1);
@@ -84,6 +85,7 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
 
   useEffect(() => {
     setLoading(true); setError(null); setBio(null);
+    setFactchecks(null); setFcFilter(null); setFactcheckPage(1);
     apiFetch(`politiques/${slug}`)
       .then(setProfile)
       .catch((e) => setError(e.message))
@@ -135,11 +137,23 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
       apiFetch(`politiques/${slug}/votes`, { limit: 15, page: votePage }).then(setVotes).catch(() => {});
   }, [tab, slug, votePage]);
 
+  // Charge la totalité des fact-checks de l'élu (au fil des pages de l'API, 100 max/appel)
+  // pour calculer des pourcentages globaux fiables et permettre le filtre par verdict côté client.
   useEffect(() => {
-    if (tab === "Fact-checks")
-      apiFetch(`politiques/${slug}/factchecks`, { limit: 30, page: factcheckPage })
-        .then(setFactchecks).catch(() => setFactchecks({ factchecks: [] }));
-  }, [tab, slug, factcheckPage]);
+    if (tab !== "Fact-checks" || factchecks) return;
+    let cancelled = false;
+    (async () => {
+      let page = 1, all = [], totalPages = 1;
+      do {
+        const res = await apiFetch(`politiques/${slug}/factchecks`, { limit: 100, page });
+        all = all.concat(res.factchecks || []);
+        totalPages = res.pagination?.totalPages || 1;
+        page += 1;
+      } while (page <= totalPages && !cancelled);
+      if (!cancelled) setFactchecks({ factchecks: all, total: all.length });
+    })().catch(() => { if (!cancelled) setFactchecks({ factchecks: [], total: 0 }); });
+    return () => { cancelled = true; };
+  }, [tab, slug, factchecks]);
 
   if (loading) return <p style={{ padding: "2rem", color: "#888" }}>Chargement...</p>;
   if (error)   return <p style={{ padding: "2rem", color: "red" }}>Erreur : {error}</p>;
@@ -328,36 +342,73 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
         {/* Fact-checks */}
         {tab === "Fact-checks" && (() => {
           if (!factchecks) return <p style={{ color: "#888" }}>Chargement…</p>;
-          const fcs = factchecks.factchecks || [];
-          const total = factchecks.total || 0;
-          if (!fcs.length) return <p style={{ color: "#aaa", fontStyle: "italic" }}>Aucun fact-check trouvé pour cet élu.</p>;
+          const all = factchecks.factchecks || [];
+          if (!all.length) return <p style={{ color: "#aaa", fontStyle: "italic" }}>Aucun fact-check trouvé pour cet élu.</p>;
 
-          // Stats verdicts
+          const PAGE_SIZE = 4;
+
+          // Verdicts : 2 badges principaux (regroupés) + badges secondaires pour les nuances
           const counts = {};
-          fcs.forEach(fc => { counts[fc.verdictRating] = (counts[fc.verdictRating] || 0) + 1; });
-          const trueCount = (counts.TRUE || 0) + (counts.MOSTLY_TRUE || 0);
-          const falseCount = (counts.FALSE || 0) + (counts.MOSTLY_FALSE || 0);
+          all.forEach(fc => { counts[fc.verdictRating] = (counts[fc.verdictRating] || 0) + 1; });
+          const groups = [
+            { key: "VRAI",          label: "vrais",         color: "#27ae60", bg: "#d4f7e8", ratings: ["TRUE", "MOSTLY_TRUE"], big: true },
+            { key: "FAUX",          label: "faux",          color: "#c0392b", bg: "#fadbd8", ratings: ["FALSE", "MOSTLY_FALSE"], big: true },
+            { key: "MOSTLY_TRUE",   label: "plutôt vrai",   color: "#2ecc71", bg: "#e8faf0", ratings: ["MOSTLY_TRUE"] },
+            { key: "HALF_TRUE",     label: "partiel",       color: "#f39c12", bg: "#fef9e7", ratings: ["HALF_TRUE"] },
+            { key: "MISLEADING",    label: "trompeur",      color: "#e67e22", bg: "#fdebd0", ratings: ["MISLEADING"] },
+            { key: "MOSTLY_FALSE",  label: "plutôt faux",   color: "#e74c3c", bg: "#fdecea", ratings: ["MOSTLY_FALSE"] },
+            { key: "UNVERIFIABLE",  label: "invérifiable",  color: "#95a5a6", bg: "#f2f3f4", ratings: ["UNVERIFIABLE"] },
+          ];
+
+          const activeGroup = groups.find(g => g.key === fcFilter);
+          const filtered = activeGroup ? all.filter(fc => activeGroup.ratings.includes(fc.verdictRating)) : all;
+          const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+          const page = Math.min(factcheckPage, totalPages);
+          const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+          const selectFilter = (key) => { setFcFilter(f => f === key ? null : key); setFactcheckPage(1); };
 
           return (
             <div>
-              {/* Score résumé — calculé sur les fact-checks affichés sur cette page, pas sur le total */}
-              <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-                <div style={{ background: "#d4f7e8", borderRadius: 10, padding: "8px 14px", textAlign: "center" }}>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: "#27ae60" }}>{Math.round(trueCount / fcs.length * 100)}%</div>
-                  <div style={{ fontSize: 11, color: "#555" }}>vrais ({trueCount} sur cette page)</div>
-                </div>
-                <div style={{ background: "#fadbd8", borderRadius: 10, padding: "8px 14px", textAlign: "center" }}>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: "#c0392b" }}>{Math.round(falseCount / fcs.length * 100)}%</div>
-                  <div style={{ fontSize: 11, color: "#555" }}>faux ({falseCount} sur cette page)</div>
-                </div>
-                <div style={{ background: "#f0f0f0", borderRadius: 10, padding: "8px 14px", textAlign: "center" }}>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: "#555" }}>{total}</div>
-                  <div style={{ fontSize: 11, color: "#555" }}>fact-checks au total</div>
-                </div>
+              {/* Score résumé — pourcentages calculés sur l'ensemble des fact-checks de l'élu (pas que la page affichée) */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                {groups.filter(g => g.big).map(g => {
+                  const globalCount = g.ratings.reduce((n, r) => n + (counts[r] || 0), 0);
+                  const pageCount = pageItems.filter(fc => g.ratings.includes(fc.verdictRating)).length;
+                  const active = fcFilter === g.key;
+                  return (
+                    <div key={g.key} onClick={() => selectFilter(g.key)} title="Cliquer pour filtrer la liste"
+                      style={{ background: g.bg, borderRadius: 10, padding: "8px 14px", textAlign: "center",
+                        cursor: "pointer", border: active ? `2px solid ${g.color}` : "2px solid transparent" }}>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: g.color }}>{Math.round(globalCount / all.length * 100)}%</div>
+                      <div style={{ fontSize: 11, color: "#555" }}>{g.label} ({pageCount} sur cette page)</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+                {groups.filter(g => !g.big).map(g => {
+                  const globalCount = g.ratings.reduce((n, r) => n + (counts[r] || 0), 0);
+                  if (!globalCount) return null;
+                  const active = fcFilter === g.key;
+                  return (
+                    <span key={g.key} onClick={() => selectFilter(g.key)} title="Cliquer pour filtrer la liste"
+                      style={{ background: g.bg, color: g.color, borderRadius: 12, padding: "4px 10px",
+                        fontSize: 11, fontWeight: 700, cursor: "pointer",
+                        border: active ? `1px solid ${g.color}` : "1px solid transparent" }}>
+                      {g.label} {Math.round(globalCount / all.length * 100)}%
+                    </span>
+                  );
+                })}
+                {fcFilter && (
+                  <span onClick={() => selectFilter(fcFilter)} style={{ fontSize: 11, color: "#1a3a6e", cursor: "pointer" }}>
+                    ✕ réinitialiser
+                  </span>
+                )}
               </div>
 
-              {/* Liste */}
-              {fcs.map((fc, i) => {
+              {/* Liste — quelques éléments par page pour tenir sans scroll, feuilletable via le pager */}
+              {pageItems.map((fc, i) => {
                 const cfg = FC_VERDICT[fc.verdictRating] || { label: fc.verdictRating, color: "#888", bg: "#f5f5f5" };
                 return (
                   <a key={i} href={fc.sourceUrl} target="_blank" rel="noreferrer"
@@ -377,7 +428,7 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
                   </a>
                 );
               })}
-              <Pager pagination={factchecks.pagination} onPage={setFactcheckPage} />
+              <Pager pagination={{ page, totalPages }} onPage={setFactcheckPage} />
             </div>
           );
         })()}
