@@ -511,6 +511,12 @@ def search_scandales(
     if annee_max < 9999:
         sc = sc[pd.to_numeric(sc["annee_faits"], errors="coerce").fillna(9999) <= annee_max]
 
+    # Plus récent d'abord (faits, sinon date d'ouverture de la procédure)
+    _dates = pd.to_datetime(sc["factsDate"], errors="coerce") if "factsDate" in sc.columns else pd.Series(index=sc.index, dtype="datetime64[ns]")
+    if "startDate" in sc.columns:
+        _dates = _dates.fillna(pd.to_datetime(sc["startDate"], errors="coerce"))
+    sc = sc.assign(_sort_date=_dates).sort_values("_sort_date", ascending=False, na_position="last").drop(columns="_sort_date")
+
     total = len(sc)
     cols  = ["title", "category", "status", "politician_name", "party_short",
              "annee_faits", "institution", "sentence", "appeal", "description"]
@@ -541,10 +547,11 @@ def search_votes(
     if annee > 0:
         vt = vt[pd.to_numeric(vt["annee_vote"], errors="coerce").fillna(0) == annee]
 
-    # Priorité aux lignes avec externalId (données de groupe disponibles)
-    if "externalId" in vt.columns:
-        has_ext = vt["externalId"].notna() & (vt["externalId"].astype(str).str.strip() != "")
-        vt = pd.concat([vt[has_ext], vt[~has_ext]]).reset_index(drop=True)
+    # Plus récent d'abord
+    if "votingDate" in vt.columns:
+        vt = vt.assign(_sort_date=pd.to_datetime(vt["votingDate"], errors="coerce")) \
+               .sort_values("_sort_date", ascending=False, na_position="last") \
+               .drop(columns="_sort_date").reset_index(drop=True)
 
     total = len(vt)
     cols  = ["externalId", "title", "result", "annee_vote", "legislature",
