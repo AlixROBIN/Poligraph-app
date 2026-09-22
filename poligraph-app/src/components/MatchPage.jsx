@@ -44,6 +44,7 @@ export default function MatchPage() {
   // Glisser la carte à la souris/au doigt — comme les boutons, mais au geste.
   const onDragStart = (e) => {
     if (animDir) return;
+    if (e.target.closest("button")) return; // ne pas capturer le pointeur depuis un bouton interne (ex: "En savoir plus")
     dragStartX.current = e.clientX;
     setDragging(true);
     e.currentTarget.setPointerCapture(e.pointerId);
