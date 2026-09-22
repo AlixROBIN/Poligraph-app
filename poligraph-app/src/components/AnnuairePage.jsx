@@ -345,7 +345,7 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
           const all = factchecks.factchecks || [];
           if (!all.length) return <p style={{ color: "#aaa", fontStyle: "italic" }}>Aucun fact-check trouvé pour cet élu.</p>;
 
-          const PAGE_SIZE = 4;
+          const PAGE_SIZE = 6;
 
           // Verdicts : 2 badges principaux (regroupés) + badges secondaires pour les nuances
           const counts = {};
