@@ -72,6 +72,7 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
   const [votes,          setVotes]          = useState(null);
   const [votePage,       setVotePage]       = useState(1);
   const [factchecks,     setFactchecks]     = useState(null);
+  const [factcheckPage,  setFactcheckPage]  = useState(1);
   const [relations,      setRelations]      = useState(null);
   const [partyMembers,   setPartyMembers]   = useState(null);
   const [partyPage,      setPartyPage]      = useState(1);
@@ -123,18 +124,22 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
   useEffect(() => {
     if (tab === "Scandales" && !affaires)
       apiFetch(`politiques/${slug}/affaires`).then(setAffaires).catch(() => setAffaires({ affairs: [] }));
-    if (tab === "Fact-checks" && !factchecks)
-      apiFetch(`politiques/${slug}/factchecks`, { limit: 30 }).then(setFactchecks).catch(() => setFactchecks({ factchecks: [] }));
     if (tab === "Relations" && !relations)
       apiFetch(`politiques/${slug}/relations`).then(setRelations).catch(() => setRelations({ clusters: [] }));
     if (tab === "Relations" && partyMembers === null && profile?.currentParty)
       fetchPartyMembers(profile.currentParty, 1);
-  }, [tab, slug, affaires, factchecks, relations, partyMembers, profile, fetchPartyMembers]);
+  }, [tab, slug, affaires, relations, partyMembers, profile, fetchPartyMembers]);
 
   useEffect(() => {
     if (tab === "Votes")
       apiFetch(`politiques/${slug}/votes`, { limit: 15, page: votePage }).then(setVotes).catch(() => {});
   }, [tab, slug, votePage]);
+
+  useEffect(() => {
+    if (tab === "Fact-checks")
+      apiFetch(`politiques/${slug}/factchecks`, { limit: 30, page: factcheckPage })
+        .then(setFactchecks).catch(() => setFactchecks({ factchecks: [] }));
+  }, [tab, slug, factcheckPage]);
 
   if (loading) return <p style={{ padding: "2rem", color: "#888" }}>Chargement...</p>;
   if (error)   return <p style={{ padding: "2rem", color: "red" }}>Erreur : {error}</p>;
@@ -174,7 +179,7 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <StatBox label="Mandats"   value={profile.mandates?.length} />
-          <StatBox label="Scandales" value={profile.affairsCount} color="#e74c3c" />
+          <StatBox label="Scandales" value={affaires?.affairs?.length ?? profile.affairsCount} color="#e74c3c" />
           <StatBox label="Fact-checks" value={profile.factchecksCount} color="#f39c12" />
         </div>
       </div>
@@ -241,23 +246,34 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
         {/* Scandales */}
         {tab === "Scandales" && (
           !affaires ? <p style={{ color: "#888" }}>Chargement...</p>
-          : affaires.affairs?.length
-            ? affaires.affairs.map((a, i) => (
-                <div key={i}
-                  onClick={() => onNavigate("exploration", { tab: "scandales", q: a.title || profile.fullName })}
-                  style={{ padding: "12px 0", borderBottom: "1px solid #f0f0f0", cursor: "pointer" }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = "#f7f9fd"}
-                  onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
-                    <span style={badge("#ffe8e8","#e74c3c")}>{a.category?.replace(/_/g," ")}</span>
-                    <span style={badge("#f0f0f0","#666")}>{a.status?.replace(/_/g," ")}</span>
-                    <span style={{ marginLeft: "auto", fontSize: 11, color: "#1a3a6e", opacity: 0.7 }}>→ Explorer</span>
-                  </div>
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{a.title}</div>
-                  <div style={{ fontSize: 12, color: "#666" }}>{a.description?.slice(0, 200)}...</div>
-                </div>
-              ))
-            : <p style={{ color: "#888" }}>Aucune affaire recensée.</p>
+          : <>
+              {affaires.affairs?.length
+                ? affaires.affairs.map((a, i) => (
+                    <div key={i}
+                      onClick={() => onNavigate("exploration", { tab: "scandales", q: a.title || profile.fullName })}
+                      style={{ padding: "12px 0", borderBottom: "1px solid #f0f0f0", cursor: "pointer" }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = "#f7f9fd"}
+                      onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
+                        <span style={badge("#ffe8e8","#e74c3c")}>{a.category?.replace(/_/g," ")}</span>
+                        <span style={badge("#f0f0f0","#666")}>{a.status?.replace(/_/g," ")}</span>
+                        <span style={{ marginLeft: "auto", fontSize: 11, color: "#1a3a6e", opacity: 0.7 }}>→ Explorer</span>
+                      </div>
+                      <div style={{ fontWeight: 600, marginBottom: 4 }}>{a.title}</div>
+                      <div style={{ fontSize: 12, color: "#666" }}>{a.description?.slice(0, 200)}...</div>
+                    </div>
+                  ))
+                : <p style={{ color: "#888" }}>Aucune affaire recensée comme protagoniste direct.</p>
+              }
+              {profile.affairsMentionedCount > 0 && (
+                <p style={{ marginTop: 14, padding: "10px 12px", background: "#f8f9ff",
+                  borderRadius: 8, fontSize: 12, color: "#666" }}>
+                  ℹ️ {profile.fullName} est par ailleurs cité(e), sans être mis(e) en cause, dans{" "}
+                  {profile.affairsMentionedCount} autre{profile.affairsMentionedCount > 1 ? "s" : ""} affaire
+                  {profile.affairsMentionedCount > 1 ? "s" : ""} (détail non disponible).
+                </p>
+              )}
+            </>
         )}
 
         {/* Votes */}
@@ -324,19 +340,19 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
 
           return (
             <div>
-              {/* Score résumé */}
+              {/* Score résumé — calculé sur les fact-checks affichés sur cette page, pas sur le total */}
               <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
                 <div style={{ background: "#d4f7e8", borderRadius: 10, padding: "8px 14px", textAlign: "center" }}>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: "#27ae60" }}>{Math.round(trueCount / total * 100)}%</div>
-                  <div style={{ fontSize: 11, color: "#555" }}>vrais ({trueCount})</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: "#27ae60" }}>{Math.round(trueCount / fcs.length * 100)}%</div>
+                  <div style={{ fontSize: 11, color: "#555" }}>vrais ({trueCount} sur cette page)</div>
                 </div>
                 <div style={{ background: "#fadbd8", borderRadius: 10, padding: "8px 14px", textAlign: "center" }}>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: "#c0392b" }}>{Math.round(falseCount / total * 100)}%</div>
-                  <div style={{ fontSize: 11, color: "#555" }}>faux ({falseCount})</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: "#c0392b" }}>{Math.round(falseCount / fcs.length * 100)}%</div>
+                  <div style={{ fontSize: 11, color: "#555" }}>faux ({falseCount} sur cette page)</div>
                 </div>
                 <div style={{ background: "#f0f0f0", borderRadius: 10, padding: "8px 14px", textAlign: "center" }}>
                   <div style={{ fontSize: 20, fontWeight: 800, color: "#555" }}>{total}</div>
-                  <div style={{ fontSize: 11, color: "#555" }}>fact-checks</div>
+                  <div style={{ fontSize: 11, color: "#555" }}>fact-checks au total</div>
                 </div>
               </div>
 
@@ -361,6 +377,7 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
                   </a>
                 );
               })}
+              <Pager pagination={factchecks.pagination} onPage={setFactcheckPage} />
             </div>
           );
         })()}
