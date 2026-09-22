@@ -14,7 +14,7 @@ const PAGES = [
 
 const Navbar = ({ currentPage, onPageChange, canGoBack, onBack }) => (
   <header className="navbar">
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
       {canGoBack && (
         <button
           onClick={onBack}

@@ -211,11 +211,11 @@ const PoliticianProfile = ({ slug, onBack, onNavigate, onSelectSlug }) => {
         </div>
       )}
 
-      {/* Onglets */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+      {/* Onglets — défilement horizontal sur mobile plutôt que de casser en plusieurs lignes */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto", flexWrap: "nowrap", WebkitOverflowScrolling: "touch" }}>
         {PTABS.map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            style={{ ...tabBtn,
+            style={{ ...tabBtn, whiteSpace: "nowrap", flexShrink: 0,
               background: tab === t ? "#1a3a6e" : "#f0f2f8",
               color: tab === t ? "#fff" : "#555",
               borderBottom: tab === t ? "2px solid #c9a227" : "2px solid transparent",
