@@ -283,7 +283,7 @@ const VoteDetail = ({ row, onClose }) => {
       {row.externalId && row.legislature && (
         <div style={{ marginTop: 12, borderTop: "1px solid #d4ddf7", paddingTop: 10 }}>
           <a
-            href={`https://www.assemblee-nationale.fr/dyn/${row.legislature}/scrutins/${row.externalId}`}
+            href={`https://www.assemblee-nationale.fr/dyn/${row.legislature}/scrutins/${row.externalId.replace(/.*V(\d+)$/, '$1')}`}
             target="_blank" rel="noreferrer"
             style={{ fontSize: 12, color: "#1a3a6e", textDecoration: "underline" }}>
             → Voir le scrutin sur l'Assemblée nationale (noms des votants par groupe)
@@ -516,7 +516,7 @@ const VoteSearch = ({ filters, initial = {} }) => {
                         <td style={{ ...tdStyle, color: "#b7770d" }}>{row.votesAbstain}</td>
                         <td style={tdStyle} onClick={(e) => e.stopPropagation()}>
                           {row.externalId && row.legislature
-                            ? <a href={`https://www.assemblee-nationale.fr/dyn/${row.legislature}/scrutins/${row.externalId}`}
+                            ? <a href={`https://www.assemblee-nationale.fr/dyn/${row.legislature}/scrutins/${row.externalId.replace(/.*V(\d+)$/, '$1')}`}
                                 target="_blank" rel="noreferrer"
                                 title="Voir les votants nominatifs sur assemblee-nationale.fr"
                                 style={{ fontSize: 13, color: "#1a3a6e", textDecoration: "none" }}>→</a>
